@@ -65,19 +65,19 @@ end
 % add VATs to seeds for connectome mapper or predict case
 if isfield(handles,'seeddefpopup')
     for pt=1:length(uipatdir)
-    direc=[uipatdir{pt},filesep];
-    stims=ea_dir2cell(dir([direc,'stimulations',filesep,ea_getspace]));
-    if ~exist('remstims','var')
-        remstims=stims;
-    else
-        todel=[];
-        for d=1:length(remstims)
-            if ~ismember(remstims{d},stims)
-               todel(end+1)=d;
+        direc=[uipatdir{pt},filesep];
+        stims=ea_dir2cell(dir([direc,'stimulations',filesep,ea_getspace]));
+        if ~exist('remstims','var')
+            remstims=stims;
+        else
+            todel=[];
+            for d=1:length(remstims)
+                if ~ismember(remstims{d},stims)
+                    todel(end+1)=d;
+                end
             end
+            remstims(todel)=[];
         end
-        remstims(todel)=[];
-    end
     end
 
     % for now only check first subject for pt. specific fibers..
