@@ -269,12 +269,9 @@ classdef ea_roi < handle
                     end
                     [X,Y,Z]=meshgrid(gv{1},gv{2},gv{3});
 
-                    %[obj.fv]=Voxel2mesh(double(obj.nii.img>obj.threshold), 3);
-                    obj.fv=[];
-                    %[obj.fv.faces,obj.fv.vertices] = MarchingCubes_simple(X,Y,Z,permute(obj.nii.img,[2,1,3]),obj.threshold);
-                    V=obj.nii.img>obj.threshold;
-                    [obj.fv.faces,obj.fv.vertices] = MarchingCubes_simple3(X,Y,Z,V);
-
+                    V=permute(obj.nii.img>obj.threshold,[2,1,3]);
+                    [obj.fv] = MarchingCubes_binaryvox(X,Y,Z,V);
+                    
                     if obj.smooth
                         if ~isempty(obj.fv.vertices) && ~isempty(obj.fv.faces)
                             
@@ -308,7 +305,7 @@ classdef ea_roi < handle
                         gv{dim}=linspace(bb(1,dim),bb(2,dim),size(obj.nii.img,dim));
                     end
                     [X,Y,Z]=meshgrid(gv{1},gv{2},gv{3});
-    
+
                     obj.fv=isosurface(X,Y,Z,permute(obj.nii.img,[2,1,3]),obj.threshold);
                     fvc=isocaps(X,Y,Z,permute(obj.nii.img,[2,1,3]),obj.threshold);
                     obj.fv.faces=[obj.fv.faces;fvc.faces+size(obj.fv.vertices,1)];
