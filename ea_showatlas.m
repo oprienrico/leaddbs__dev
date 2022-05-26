@@ -637,11 +637,20 @@ for nativemni=nm % switch between native and mni space atlases.
 
     try
         setappdata(resultfig,'atlases',atlases);
+    catch
+        %do nothing
     end
 
     try
-        atlases.rebuild=0; % always reset rebuild flag.
-        ea_saveatlas(atlasFolder,options.atlasset,atlases);
+        % only store if the atlas was computed in patient space, 
+        % atlasStoreAtEachRun is set to 1, or the rebuild flag 
+        % was 1 (which should not happen)
+        if (~is_mni) || options.d3.atlasStoreAtEachRun || atlases.rebuild
+            atlases.rebuild=0; % always reset rebuild flag.
+            ea_saveatlas(atlasFolder,options.atlasset,atlases);
+        end
+    catch
+        %do nothing
     end
 
     if isfield(atlases, 'citation')

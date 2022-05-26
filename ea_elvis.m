@@ -391,6 +391,12 @@ catch
     options.d3.surfaceForceReComp=0;
 end
 
+try
+    options.d3.atlasStoreAtEachRun=prefs.d3.atlasStoreAtEachRun;
+catch
+    options.d3.atlasStoreAtEachRun=0;
+end
+
 % Show atlas data
 if options.d3.writeatlases && ~strcmp(options.atlasset, 'Use none')
     atlases = ea_showatlas(resultfig,elstruct,options);
