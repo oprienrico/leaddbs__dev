@@ -1,7 +1,15 @@
-LEAD-DBS
+LEAD-DBS bleeding edge
 ========
 
 LEAD-DBS is ***NOT*** intended for clinical use!
+
+## Notes (and how to use it)
+This version is intended to test out all the pull requests I am working on, before they are pushed to the mainline LEAD-DBS
+If you want to use test these features/bugfixes before they go to the mainline, download it and do NOT keep it up to date though GIT.
+
+This is just because it this branch will be deleted and regenerated after every pull-request have been processed. 
+Hence, it will not have a clean git-history and will mismatch with your local history.
+
 
 ## About Lead-DBS
 
