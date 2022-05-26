@@ -217,9 +217,11 @@ for nativemni=nm % switch between native and mni space atlases.
                     try
                         if isfield(atlases.XYZ{atlas,side},'val') % volumetric atlas
                             thresh=ea_detthresh(atlases,atlas,atlases.XYZ{atlas,side}.val);
-                            atsearch=KDTreeSearcher(atlases.XYZ{atlas,side}.mm(atlases.XYZ{atlas,side}.val>thresh,:));
+                            %atsearch=KDTreeSearcher(atlases.XYZ{atlas,side}.mm(atlases.XYZ{atlas,side}.val>thresh,:));
+                            atlas_points=atlases.XYZ{atlas,side}.mm(atlases.XYZ{atlas,side}.val>thresh,:);
                         else % fibertract
-                            atsearch=KDTreeSearcher(atlases.XYZ{atlas,side}.mm(:,1:3));
+                            %atsearch=KDTreeSearcher(atlases.XYZ{atlas,side}.mm(:,1:3));
+                            atlas_points=atlases.XYZ{atlas,side}.mm(:,1:3);
                         end
 
                         for el=1:length(elstruct)
@@ -233,7 +235,8 @@ for nativemni=nm % switch between native and mni space atlases.
                                     warning_printf(['Statistics for this structure(' atlases.names{atlas} ', on side=' num2str(side) ') will not be computed as there is no lead in it.']);
                                 end
                             else
-                                [~,D]=knnsearch(atsearch,ea_stats.electrodes(el).coords_mm{side});
+                                %[~,D]=knnsearch(atsearch,ea_stats.electrodes(el).coords_mm{side});
+                                D=ea_getmindist_point_to_pointcloud(ea_stats.electrodes(el).coords_mm{side},atlas_points);
 
                                 ea_stats.conmat{el,side}(:,atlas)=D;
                                 Dh=D;
@@ -377,9 +380,11 @@ for nativemni=nm % switch between native and mni space atlases.
                     try
                         if isfield(atlases.XYZ{atlas,side},'val') % volumetric atlas
                             thresh=ea_detthresh(atlases,atlas,atlases.XYZ{atlas,side}.val);
-                            atsearch=KDTreeSearcher(XYZ.mm(XYZ.val>thresh,:));
+                            %atsearch=KDTreeSearcher(XYZ.mm(XYZ.val>thresh,:));
+                            atlas_points=XYZ.mm(XYZ.val>thresh,:);
                         else % fibertract
-                            atsearch=KDTreeSearcher(XYZ.mm(:,1:3));
+                            %atsearch=KDTreeSearcher(XYZ.mm(:,1:3));
+                            atlas_points=XYZ.mm(:,1:3);
                         end
 
                         for el=1:length(elstruct)
@@ -393,7 +398,8 @@ for nativemni=nm % switch between native and mni space atlases.
                                     warning_printf(['Statistics for this structure(' atlases.names{atlas} ', on side=' num2str(side) ') will not be computed as there is no lead in it.']);
                                 end
                             else
-                                [~,D]=knnsearch(atsearch,ea_stats.electrodes(el).coords_mm{side});
+                                %[~,D]=knnsearch(atsearch,ea_stats.electrodes(el).coords_mm{side});
+                                D=ea_getmindist_point_to_pointcloud(ea_stats.electrodes(el).coords_mm{side},atlas_points);
 
                                 ea_stats.conmat{el,side}(:,atlas)=D;
                                 Dh=D;
