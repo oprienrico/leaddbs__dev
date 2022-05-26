@@ -35,7 +35,7 @@ classdef ea_roi < handle
         DiffuseStrength=0.4 % patch property
         AmbientStrength=0.3 % patch property
 
-        fastcomp=0;%compute with simplified meshing
+        surfaceCompType=0;%compute with simplified meshing
     end
 
     methods(Static)
@@ -229,7 +229,7 @@ classdef ea_roi < handle
             if ismember(evtnm,{'all','threshold','smooth','hullsimplify','usesolidcolor'}) % need to recalc fv here:
 
 
-                if obj.fastcomp==1
+                if obj.surfaceCompType==1
                     bb = [1,1,1;size(obj.nii.img)];
                     bb = ea_vox2mm(bb, obj.nii.mat);
 
@@ -260,7 +260,7 @@ classdef ea_roi < handle
                         end
                     end
                 
-                elseif obj.fastcomp==2
+                elseif obj.surfaceCompType==2
                     bb = [1,1,1;size(obj.nii.img)];
                     bb = ea_vox2mm(bb, obj.nii.mat);
                     gv=cell(3,1);
@@ -296,7 +296,7 @@ classdef ea_roi < handle
                         end
                     end
 
-                elseif obj.fastcomp==0
+                elseif obj.surfaceCompType==0
                     %classic method
                     bb = [1,1,1;size(obj.nii.img)];
                     bb = ea_vox2mm(bb, obj.nii.mat);

@@ -178,9 +178,9 @@ for nativemni=nm % switch between native and mni space atlases.
                 atlases.roi{atlas,side}.htH=ht; % attach to tooltip menu
                 atlases.roi{atlas,side}.Tag=roiTag;
                 atlases.roi{atlas,side}.breathelife;
-                if ~is_mni
+                if (~is_mni) || options.d3.surfaceForceReComp
                     try
-                        atlases.roi{atlas,side}.fastcomp=options.d3.patch_comp;
+                        atlases.roi{atlas,side}.surfaceCompType=options.d3.surfaceCompType;
                     catch
                         %leave as default;
                     end
