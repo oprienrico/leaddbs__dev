@@ -33,9 +33,11 @@ for nativemni=nm % switch between native and mni space atlases.
         case 1 % mni
             atlasFolder = ea_space(options,'atlases');
             mifix='';
+            is_mni=true;
         case 2 % native
             atlasFolder = [options.root,options.patientname, filesep, 'atlases', filesep];
             mifix='';
+            is_mni=false;
     end
 
     atlascnt=1;
@@ -176,8 +178,15 @@ for nativemni=nm % switch between native and mni space atlases.
                 atlases.roi{atlas,side}.htH=ht; % attach to tooltip menu
                 atlases.roi{atlas,side}.Tag=roiTag;
                 atlases.roi{atlas,side}.breathelife;
-                atlases.roi{atlas,side}.smooth=options.prefs.hullsmooth;
-                atlases.roi{atlas,side}.update_roi;
+                if ~is_mni
+                    try
+                        atlases.roi{atlas,side}.fastcomp=options.d3.patch_comp;
+                    catch
+                        %leave as default;
+                    end
+                    atlases.roi{atlas,side}.smooth=options.prefs.hullsmooth;%this already triggers the update, no need to reupdate
+                    %atlases.roi{atlas,side}.update_roi;
+                end
 
                 atlassurfs{atlascnt,1}=atlases.roi{atlas,side};
                 colorbuttons(atlascnt)=atlases.roi{atlas,side}.toggleH;

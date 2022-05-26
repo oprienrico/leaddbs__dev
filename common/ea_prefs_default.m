@@ -151,6 +151,7 @@ prefs.d3.fiber_damaged_color = [0.5 0 0.5];
 prefs.d3.fiber_csf_color = [0 0 1];
 prefs.d3.fiber_outside_color = [0 1 0];
 prefs.d3.pointcloudstyle = 'plain'; % Show 'plain' or '3d' point cloud
+prefs.d3.patch_comp=1;%default is 0, with isosurface/isocaps
 
 %% Video export
 prefs.video.path=[-90,10

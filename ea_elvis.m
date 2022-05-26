@@ -375,10 +375,19 @@ prefs = ea_prefs;
 v = prefs.machine.view;
 ea_view(v);
 
+% set the type of ea_roi computation (in case it is recomputed)
+try
+    if ~isfield(options,'d3')
+        options.d3=[];
+    end
+    options.d3.patch_comp=prefs.d3.patch_comp;
+catch
+    options.d3.patch_comp=0;
+end
+
 % Show atlas data
 if options.d3.writeatlases && ~strcmp(options.atlasset, 'Use none')
     atlases = ea_showatlas(resultfig,elstruct,options);
-
     if ~strcmp(options.d3.verbose,'off') && ~atlases.discfibersonly
         ea_openatlascontrol([],[],atlases,resultfig,options);
     end
