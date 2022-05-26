@@ -151,6 +151,9 @@ prefs.d3.fiber_damaged_color = [0.5 0 0.5];
 prefs.d3.fiber_csf_color = [0 0 1];
 prefs.d3.fiber_outside_color = [0 1 0];
 prefs.d3.pointcloudstyle = 'plain'; % Show 'plain' or '3d' point cloud
+prefs.d3.surfaceForceReComp=0;%if 1 forces recompute of surfaces at every 3D plotting, 0 does not (for MNI)
+prefs.d3.surfaceCompType=0;%default is 0, with matlab isosurface/isocaps, 1 with topologically correct and manifold dual marching cubes (eo_mdmc_mex), 2 with binary based marching cubes
+prefs.d3.atlasStoreAtEachRun=0;% default is 0, as the atlas is generated with ea_genatlastable, and will not change, at least for MNI.
 
 %% Video export
 prefs.video.path=[-90,10

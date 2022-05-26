@@ -34,6 +34,8 @@ classdef ea_roi < handle
         SpecularStrength=0.3 % patch property
         DiffuseStrength=0.4 % patch property
         AmbientStrength=0.3 % patch property
+
+        surfaceCompType=0;%compute with simplified meshing
     end
 
     methods(Static)
@@ -225,42 +227,116 @@ classdef ea_roi < handle
                 obj.patchH=patch;
             end
             if ismember(evtnm,{'all','threshold','smooth','hullsimplify','usesolidcolor'}) % need to recalc fv here:
-                bb = [1,1,1;size(obj.nii.img)];
-                bb = ea_vox2mm(bb, obj.nii.mat);
-                gv=cell(3,1);
-                for dim=1:3
-                    gv{dim}=linspace(bb(1,dim),bb(2,dim),size(obj.nii.img,dim));
-                end
-                [X,Y,Z]=meshgrid(gv{1},gv{2},gv{3});
 
-                obj.fv=isosurface(X,Y,Z,permute(obj.nii.img,[2,1,3]),obj.threshold);
-                fvc=isocaps(X,Y,Z,permute(obj.nii.img,[2,1,3]),obj.threshold);
-                obj.fv.faces=[obj.fv.faces;fvc.faces+size(obj.fv.vertices,1)];
-                obj.fv.vertices=[obj.fv.vertices;fvc.vertices];
 
-                if obj.smooth
-                    if ~isempty(obj.fv.vertices) && ~isempty(obj.fv.faces)
-                        
-                        obj.sfv=ea_smoothpatch(obj.fv,1,obj.smooth);
+                if obj.surfaceCompType==1
+                    bb = [1,1,1;size(obj.nii.img)];
+                    bb = ea_vox2mm(bb, obj.nii.mat);
+
+                    obj.fv=[];
+                    [obj.fv.vertices,obj.fv.faces]=eo_mdmc_mex(bb(:,1),bb(:,2),bb(:,3), obj.nii.img,obj.threshold);
+
+                    if obj.smooth
+                        if ~isempty(obj.fv.vertices) && ~isempty(obj.fv.faces)
+                            
+                            obj.sfv=ea_smoothpatch(obj.fv,1,obj.smooth);
+                        else
+                            return
+                        end
                     else
-                        return
+                        obj.sfv=obj.fv;
                     end
-                else
-                    obj.sfv=obj.fv;
+    
+                    if ischar(obj.hullsimplify)
+                        % get to 700 faces
+                        simplify=700/length(obj.sfv.faces);
+                        obj.sfv=reducepatch(obj.sfv,simplify,'fast');
+                    else
+                        if obj.hullsimplify<1 && obj.hullsimplify>0
+                            obj.sfv=reducepatch(obj.sfv,obj.hullsimplify,'fast');
+                        elseif obj.hullsimplify>1
+                            simplify=obj.hullsimplify/length(obj.fv.faces);
+                            obj.sfv=reducepatch(obj.sfv,simplify,'fast');
+                        end
+                    end
+                
+                elseif obj.surfaceCompType==2
+                    bb = [1,1,1;size(obj.nii.img)];
+                    bb = ea_vox2mm(bb, obj.nii.mat);
+                    gv=cell(3,1);
+                    for dim=1:3
+                        gv{dim}=linspace(bb(1,dim),bb(2,dim),size(obj.nii.img,dim));
+                    end
+                    [X,Y,Z]=meshgrid(gv{1},gv{2},gv{3});
+
+                    V=permute(obj.nii.img>obj.threshold,[2,1,3]);
+                    [obj.fv] = MarchingCubes_binaryvox(X,Y,Z,V);
+                    
+                    if obj.smooth
+                        if ~isempty(obj.fv.vertices) && ~isempty(obj.fv.faces)
+                            
+                            obj.sfv=ea_smoothpatch(obj.fv,1,obj.smooth);
+                        else
+                            return
+                        end
+                    else
+                        obj.sfv=obj.fv;
+                    end
+    
+                    if ischar(obj.hullsimplify)
+                        % get to 700 faces
+                        simplify=700/length(obj.sfv.faces);
+                        obj.sfv=reducepatch(obj.sfv,simplify,'fast');
+                    else
+                        if obj.hullsimplify<1 && obj.hullsimplify>0
+                            obj.sfv=reducepatch(obj.sfv,obj.hullsimplify,'fast');
+                        elseif obj.hullsimplify>1
+                            simplify=obj.hullsimplify/length(obj.fv.faces);
+                            obj.sfv=reducepatch(obj.sfv,simplify,'fast');
+                        end
+                    end
+
+                elseif obj.surfaceCompType==0
+                    %classic method
+                    bb = [1,1,1;size(obj.nii.img)];
+                    bb = ea_vox2mm(bb, obj.nii.mat);
+                    gv=cell(3,1);
+                    for dim=1:3
+                        gv{dim}=linspace(bb(1,dim),bb(2,dim),size(obj.nii.img,dim));
+                    end
+                    [X,Y,Z]=meshgrid(gv{1},gv{2},gv{3});
+
+                    obj.fv=isosurface(X,Y,Z,permute(obj.nii.img,[2,1,3]),obj.threshold);
+                    fvc=isocaps(X,Y,Z,permute(obj.nii.img,[2,1,3]),obj.threshold);
+                    obj.fv.faces=[obj.fv.faces;fvc.faces+size(obj.fv.vertices,1)];
+                    obj.fv.vertices=[obj.fv.vertices;fvc.vertices];
+
+                    if obj.smooth
+                        if ~isempty(obj.fv.vertices) && ~isempty(obj.fv.faces)
+                            
+                            obj.sfv=ea_smoothpatch(obj.fv,1,obj.smooth);
+                        else
+                            return
+                        end
+                    else
+                        obj.sfv=obj.fv;
+                    end
+    
+                    if ischar(obj.hullsimplify)
+                        % get to 700 faces
+                        simplify=700/length(obj.sfv.faces);
+                        obj.sfv=reducepatch(obj.sfv,simplify);
+                    else
+                        if obj.hullsimplify<1 && obj.hullsimplify>0
+                            obj.sfv=reducepatch(obj.sfv,obj.hullsimplify);
+                        elseif obj.hullsimplify>1
+                            simplify=obj.hullsimplify/length(obj.fv.faces);
+                            obj.sfv=reducepatch(obj.sfv,simplify);
+                        end
+                    end
                 end
 
-                if ischar(obj.hullsimplify)
-                    % get to 700 faces
-                    simplify=700/length(obj.sfv.faces);
-                    obj.sfv=reducepatch(obj.sfv,simplify);
-                else
-                    if obj.hullsimplify<1 && obj.hullsimplify>0
-                        obj.sfv=reducepatch(obj.sfv,obj.hullsimplify);
-                    elseif obj.hullsimplify>1
-                        simplify=obj.hullsimplify/length(obj.fv.faces);
-                        obj.sfv=reducepatch(obj.sfv,simplify);
-                    end
-                end
+               
 
                 if obj.binary || obj.usesolidcolor
                     obj.cdat=abs(repmat(obj.color,length(obj.sfv.vertices),1) ... % C-Data for surface

@@ -33,9 +33,11 @@ for nativemni=nm % switch between native and mni space atlases.
         case 1 % mni
             atlasFolder = ea_space(options,'atlases');
             mifix='';
+            is_mni=true;
         case 2 % native
             atlasFolder = [options.root,options.patientname, filesep, 'atlases', filesep];
             mifix='';
+            is_mni=false;
     end
 
     atlascnt=1;
@@ -176,8 +178,15 @@ for nativemni=nm % switch between native and mni space atlases.
                 atlases.roi{atlas,side}.htH=ht; % attach to tooltip menu
                 atlases.roi{atlas,side}.Tag=roiTag;
                 atlases.roi{atlas,side}.breathelife;
-                atlases.roi{atlas,side}.smooth=options.prefs.hullsmooth;
-                atlases.roi{atlas,side}.update_roi;
+                if (~is_mni) || options.d3.surfaceForceReComp
+                    try
+                        atlases.roi{atlas,side}.surfaceCompType=options.d3.surfaceCompType;
+                    catch
+                        %leave as default;
+                    end
+                    atlases.roi{atlas,side}.smooth=options.prefs.hullsmooth;%this already triggers the update, no need to reupdate
+                    %atlases.roi{atlas,side}.update_roi;
+                end
 
                 atlassurfs{atlascnt,1}=atlases.roi{atlas,side};
                 colorbuttons(atlascnt)=atlases.roi{atlas,side}.toggleH;
@@ -217,9 +226,11 @@ for nativemni=nm % switch between native and mni space atlases.
                     try
                         if isfield(atlases.XYZ{atlas,side},'val') % volumetric atlas
                             thresh=ea_detthresh(atlases,atlas,atlases.XYZ{atlas,side}.val);
-                            atsearch=KDTreeSearcher(atlases.XYZ{atlas,side}.mm(atlases.XYZ{atlas,side}.val>thresh,:));
+                            %atsearch=KDTreeSearcher(atlases.XYZ{atlas,side}.mm(atlases.XYZ{atlas,side}.val>thresh,:));
+                            atlas_points=atlases.XYZ{atlas,side}.mm(atlases.XYZ{atlas,side}.val>thresh,:);
                         else % fibertract
-                            atsearch=KDTreeSearcher(atlases.XYZ{atlas,side}.mm(:,1:3));
+                            %atsearch=KDTreeSearcher(atlases.XYZ{atlas,side}.mm(:,1:3));
+                            atlas_points=atlases.XYZ{atlas,side}.mm(:,1:3);
                         end
 
                         for el=1:length(elstruct)
@@ -233,7 +244,8 @@ for nativemni=nm % switch between native and mni space atlases.
                                     warning_printf(['Statistics for this structure(' atlases.names{atlas} ', on side=' num2str(side) ') will not be computed as there is no lead in it.']);
                                 end
                             else
-                                [~,D]=knnsearch(atsearch,ea_stats.electrodes(el).coords_mm{side});
+                                %[~,D]=knnsearch(atsearch,ea_stats.electrodes(el).coords_mm{side});
+                                D=ea_getmindist_point_to_pointcloud(ea_stats.electrodes(el).coords_mm{side},atlas_points);
 
                                 ea_stats.conmat{el,side}(:,atlas)=D;
                                 Dh=D;
@@ -377,9 +389,11 @@ for nativemni=nm % switch between native and mni space atlases.
                     try
                         if isfield(atlases.XYZ{atlas,side},'val') % volumetric atlas
                             thresh=ea_detthresh(atlases,atlas,atlases.XYZ{atlas,side}.val);
-                            atsearch=KDTreeSearcher(XYZ.mm(XYZ.val>thresh,:));
+                            %atsearch=KDTreeSearcher(XYZ.mm(XYZ.val>thresh,:));
+                            atlas_points=XYZ.mm(XYZ.val>thresh,:);
                         else % fibertract
-                            atsearch=KDTreeSearcher(XYZ.mm(:,1:3));
+                            %atsearch=KDTreeSearcher(XYZ.mm(:,1:3));
+                            atlas_points=XYZ.mm(:,1:3);
                         end
 
                         for el=1:length(elstruct)
@@ -393,7 +407,8 @@ for nativemni=nm % switch between native and mni space atlases.
                                     warning_printf(['Statistics for this structure(' atlases.names{atlas} ', on side=' num2str(side) ') will not be computed as there is no lead in it.']);
                                 end
                             else
-                                [~,D]=knnsearch(atsearch,ea_stats.electrodes(el).coords_mm{side});
+                                %[~,D]=knnsearch(atsearch,ea_stats.electrodes(el).coords_mm{side});
+                                D=ea_getmindist_point_to_pointcloud(ea_stats.electrodes(el).coords_mm{side},atlas_points);
 
                                 ea_stats.conmat{el,side}(:,atlas)=D;
                                 Dh=D;
@@ -622,11 +637,20 @@ for nativemni=nm % switch between native and mni space atlases.
 
     try
         setappdata(resultfig,'atlases',atlases);
+    catch
+        %do nothing
     end
 
     try
-        atlases.rebuild=0; % always reset rebuild flag.
-        ea_saveatlas(atlasFolder,options.atlasset,atlases);
+        % only store if the atlas was computed in patient space, 
+        % atlasStoreAtEachRun is set to 1, or the rebuild flag 
+        % was 1 (which should not happen)
+        if (~is_mni) || options.d3.atlasStoreAtEachRun || atlases.rebuild
+            atlases.rebuild=0; % always reset rebuild flag.
+            ea_saveatlas(atlasFolder,options.atlasset,atlases);
+        end
+    catch
+        %do nothing
     end
 
     if isfield(atlases, 'citation')
