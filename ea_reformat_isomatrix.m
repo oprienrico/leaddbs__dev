@@ -28,7 +28,7 @@ if ~iscell(isom) % check if isomatrix is a cell ({[right_matrix]},{[left_matrix]
             end
             stimmat{side}=bsxfun(@times,stimmat{side}>0,isom(:,side));
         end
-    elseif (min(size(isom))==6 || min(size(isom))==8) && max(size(isom))==length(M.patient.list) % 6 (1 value for each contact pair) or 8 (1 value for each contact) * patientlist
+    elseif ((size(isom,2))==6 || (size(isom,2))==8) && (size(isom,1)==length(M.patient.list)) % 6 (1 value for each contact pair) or 8 (1 value for each contact) * patientlist
         if size(isom,2)==length(M.patient.list)
             isom=isom';
         end
