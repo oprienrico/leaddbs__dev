@@ -1,13 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Sun Oct 28 08:34:11 2018
-
-@author: trieu,butenko
-"""
-import numpy as np
-
-'''Those are not all parameters. If you have doubts, use OSS-DBS GUI'''
-
 d = {
     # Simulation statuses
     'Segm_MRI_processed': 0,
@@ -25,7 +15,7 @@ d = {
     # Details of segmented MRI and DTI
     'MRI_data_name': 'segmask.nii',
     'MRI_in_m': 0,
-    'DTI_data_name': 'IITmean_tensor_Norm_mapping.nii.gz',
+    'DTI_data_name': 'IITMeanTensor_NormMapping.nii.gz',
     'DTI_in_m': 0,
     'CSF_index': 3.0,  # indexing as from segmask
     'WM_index': 2.0,
@@ -92,7 +82,7 @@ d = {
     'spectrum_trunc_method': 'Octave Band Method',
     # 'No Truncation' or 'Octave Band Method' (recommended, see Butenko et al, EMBC proceedings, 2019)
     'trunc_param': 130.0,  # octave bands will be deployed after this frequency
-    'Truncate_the_obtained_full_solution': 0,  # irrelevant
+    'Truncate_the_obtained_full_solution': 0,  # true only if we want to use truncation of already computed full power spectrum solution (useful for benchmarks)
 
     # DBS signal (you can set charge-balancing in OSS_platform/Launcher_OSS_lite.py)
     'current_control': 1,  # 0 for voltage-controlled

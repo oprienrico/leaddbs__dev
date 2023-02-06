@@ -119,7 +119,6 @@ if isfield(handles,'vizspacepopup')
     end
 end
 
-options.atl.normalize=0; % normalize patient specific atlasset. This is not done anymore for now.
 try
     options.atl.can=get(handles.vizspacepopup,'Value')==1; % display canonical atlases
 catch
@@ -200,7 +199,7 @@ try
     options.entrypointn=get(handles.targetpopup,'Value');
 end
 
-options.writeoutpm=1;
+options.writeoutpm = 0;
 
 try
     options.elmodeln = get(handles.electrode_model_popup,'Value');

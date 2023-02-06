@@ -157,8 +157,8 @@ if options.elspec.numel > 1
         case {'Medtronic B33005'
               'Medtronic B33015'
               'Boston Scientific Vercise Directed'
-              'St. Jude Directed 6172 (short)'
-              'St. Jude Directed 6173 (long)'}
+              'Abbott Directed 6172 (short)'
+              'Abbott Directed 6173 (long)'}
             for side=options.sides
                 coords_temp{side}(1,:) = coords_mm{side}(1,:);
                 coords_temp{side}(2,:) = mean(coords_mm{side}(2:4,:));
@@ -198,7 +198,7 @@ if isempty(elplot) % first time plot electrode contacts
     mplot(1,1)=plot3(markers(options.elside).head(1),markers(options.elside).head(2),markers(options.elside).head(3),'*','MarkerEdgeColor',[0.9 0.2 0.2],'MarkerFaceColor','none','MarkerSize',25);
     mplot(2,1)=plot3(markers(options.elside).tail(1),markers(options.elside).tail(2),markers(options.elside).tail(3),'*','MarkerEdgeColor',[0.2 0.9 0.2],'MarkerFaceColor','none','MarkerSize',25);
     for el=1:size(coords_mm{options.elside},1)
-        elplot(cnt)=plot3(coords_mm{options.elside}(el,1),coords_mm{options.elside}(el,2),coords_mm{options.elside}(el,3),'O','MarkerEdgeColor',[0.9 0.9 0.9],'MarkerFaceColor','none','MarkerSize',25);
+        elplot(cnt)=plot3(coords_mm{options.elside}(el,1),coords_mm{options.elside}(el,2),coords_mm{options.elside}(el,3),'O','MarkerEdgeColor',[0.8 0 1],'MarkerFaceColor','none','MarkerSize',25);
         cnt=cnt+1;
     end
 
@@ -324,8 +324,8 @@ for doxx=0:1
 
     if ~getappdata(mcfig,'planecset') % initially and once set contrast based on image data.
 
-        if options.modality==1 % MR
-        elseif options.modality==2 % CT
+        if strcmp(options.subj.postopModality, 'MRI') % MR
+        elseif strcmp(options.subj.postopModality, 'CT') % CT
             lthresh=800; % initial guesses for CT
             uthresh=2800;
             try % try estimating a better guess..
@@ -434,10 +434,10 @@ for subpl=getsuplots(1)
         slice=ea_sample_slice(Vtra,'tra',wsize,'vox',mks,subpl);
     end
     slice=ea_contrast(slice,contrast,offset);
-    switch options.modality
-        case 1 % MR
+    switch options.subj.postopModality
+        case 'MRI'
             [~,minix]=min(slice(:));
-        case 2 % CT
+        case 'CT'
             [~,minix]=max(slice(:));
     end
     [optxx,optyy]=ind2sub(size(slice),minix);
@@ -581,8 +581,8 @@ else
     type='norm';
 end
 
-switch options.modality
-    case 1 % MR
+switch options.subj.postopModality
+    case 'MRI'
         V=getappdata(mcfig,[ID,type]);
 
         if isempty(V)
@@ -611,7 +611,7 @@ switch options.modality
             end
         end
         setappdata(mcfig,[ID,type],V);
-    case 2 % CT - ignore wishes, always feed out V as CT.
+    case 'CT' % Always feed out V as CT.
         if options.native
             V=getappdata(mcfig,'VCTnative');
             if isempty(V)

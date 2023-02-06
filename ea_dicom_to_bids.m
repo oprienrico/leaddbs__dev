@@ -46,8 +46,13 @@ for image_idx = 1:N_fnames
 
     % get .json and read it if possible
     if isfile(fullfile(nii_folder, [fnames{image_idx}, '.json']))
-        imgs{image_idx}.json_sidecar = loadjson(fullfile(nii_folder, [fnames{image_idx}, '.json']));
-        imgs{image_idx}.json_found = 1;
+        try
+            imgs{image_idx}.json_sidecar = loadjson(fullfile(nii_folder, [fnames{image_idx}, '.json']));
+            imgs{image_idx}.json_found = 1;
+        catch
+            warning('There was a problem while loading the .json file at %s, please ensure correct .json format.', fullfile(nii_folder, [fnames{image_idx}, '.json']))
+            imgs{image_idx}.json_found = 0;
+        end
     else
         imgs{image_idx}.json_found = 0;
     end
@@ -58,7 +63,8 @@ close(h_wait);
 
 anat_modalities = {'T1w', 'T2w', 'FGATIR', 'FLAIR', 'T2starw', 'PDw'};  % a list of all supported modalities
 func_dwi_modalities = {'bold', 'sbref', 'dwi'};
-postop_modalities = {'CT', 'ax_MRI', 'sag_MRI', 'cor_MRI'};  % specifically a list of modalities required for postoperative sessions, will be used to check if postop modalities have been found
+postop_modalities = {'CT', 'MRI'};          % specifically a list of modalities required for postoperative sessions, will be used to check if postop modalities have been found
+postop_acq_tags = {'ax', 'cor', 'sag'};     % a list of required acq-tags for the postop MRI images
 
 % options that should appear in the table
 table_options = struct;
@@ -101,30 +107,39 @@ uiapp.previewtree_subj.Text = subjID;
 expand(uiapp.Tree, 'all');
 
 preview_nii(uiapp, imgs, []); % set initial image to the first one
+uiapp.niiFileTable.SelectionType = 'row';
+uiapp.niiFileTable.Selection = 1;
 
 %% set callbacks of main GUI
-cell_change_callback(uiapp, subjID, imgs, anat_modalities, postop_modalities, []) % call preview tree updater to get preallocated changes
+cell_change_callback(uiapp, subjID, imgs, anat_modalities, postop_modalities, postop_acq_tags, []) % call preview tree updater to get preallocated changes
 
 uiapp.niiFileTable.CellSelectionCallback = @(src,event) preview_nii(uiapp, imgs, event); % callback for table selection -> display current selected image
-uiapp.niiFileTable.CellEditCallback = @(src,event) cell_change_callback(uiapp, subjID, imgs, anat_modalities, postop_modalities, event); % callback for cell change -> update uiapp tree and adjacent cells
+uiapp.niiFileTable.CellEditCallback = @(src,event) cell_change_callback(uiapp, subjID, imgs, anat_modalities, postop_modalities, postop_acq_tags, event); % callback for cell change -> update uiapp tree and adjacent cells
 
 uiapp.UIFigure.WindowScrollWheelFcn = @(src, event) scroll_nii(uiapp, event);     % callback for scrolling images
 
 % OK button behaviour
-uiapp.OKButton.ButtonPushedFcn = @(btn,event) ok_button_function(uiapp, table_options, dataset_folder, nii_folder, subjID, postop_modalities);
+uiapp.OKButton.ButtonPushedFcn = @(btn,event) ok_button_function(uiapp, table_options, dataset_folder, nii_folder, subjID, postop_modalities, postop_acq_tags);
 
 % cancel button behaviour
 uiapp.CancelButton.ButtonPushedFcn =  @(btn,event) cancel_button_function(uiapp);
 
 % looup table behaviour
 uiapp.LookupButton.ButtonPushedFcn = @(btn,event) lookup_button_function(uiapp, imgs, imgs_resolution, table_options, subjID, anat_modalities, postop_modalities);
+
 waitfor(uiapp.UIFigure);
 
 try
     anat_files = getappdata(groot, 'anat_files');
 catch
     anat_files = [];
+end
 
+if ~isempty(anat_files)
+    field_names = fieldnames(anat_files);
+    empty_fields = cellfun(@(x) isempty(anat_files.(x)), field_names);
+    remove_fields = field_names(empty_fields);
+    anat_files = rmfield(anat_files, remove_fields);
 end
 
 end
@@ -165,7 +180,7 @@ T_preallocated = preallocate_table(main_gui.niiFileTable.Data, lookup_table, img
 
 main_gui.niiFileTable.Data = T_preallocated;
 
-cell_change_callback(main_gui, subjID, imgs, anat_modalities, postop_modalities, [])
+cell_change_callback(main_gui, subjID, imgs, anat_modalities, postop_modalities, postop_acq_tags, [])
 
 delete(lookup_table_gui);
 
@@ -215,7 +230,7 @@ lookup_table_gui.UITable.Data = lookup_table_data;
 end
 
 %% cell change callback
-function cell_change_callback(uiapp, subjID, imgs, anat_modalities, postop_modalities, event)
+function cell_change_callback(uiapp, subjID, imgs, anat_modalities, postop_modalities, postop_acq_tags, event)
 
 uiapp.previewtree_preop_anat.Children.delete;     % delete children
 uiapp.previewtree_postop_anat.Children.delete;    % delete children
@@ -241,6 +256,13 @@ for i = 1:height(uiapp.niiFileTable.Data)
             uiapp.niiFileTable.Data.Type(i) = 'anat';
             uiapp.niiFileTable.Data.Session(i) = 'postop';
             uiapp.niiFileTable.Data.Task(i) = '-';
+
+            % if current acquistion tag is not ax, cor or sag, reset it
+            if ~any(strcmp(uiapp.niiFileTable.Data.Acquisition(i), postop_acq_tags)) && strcmp(modality, 'MRI')
+                uiapp.niiFileTable.Data.Acquisition(i) = '';
+                uialert(uiapp.UIFigure, 'For postop MRIs, the acquisition tag may only be set to <ax>, <sag> or <cor>.', 'Invalid acquisition tag in postop MRI');
+            end
+
         % set type to func for bold modality
         elseif strcmp(modality, 'bold') && event.Indices(2) > 2 && event.Indices(1) == i && uiapp.niiFileTable.UserData.task_set(i) == 1
             uiapp.niiFileTable.Data.Type(i) = 'func';
@@ -276,6 +298,7 @@ for i = find(~uiapp.niiFileTable.Data.Include)'
     end
 
 end
+
 
 % finally, go through all the files that have been selected to include and update them in the uitree
 for i = find(uiapp.niiFileTable.Data.Include)'
@@ -331,6 +354,7 @@ for i = find(uiapp.niiFileTable.Data.Include)'
     end
 
 end
+
 end
 
 
@@ -345,7 +369,8 @@ image_types = fieldnames(lookup_table);
 % filenames
 for rowIdx = 1:height(table)
 
-    fname = table.Filename{rowIdx};
+    % Remove folder name from file name when populating the table
+    fname = regexprep(table.Filename{rowIdx}, '^sub-[^\W_]+_', '');
 
     % image types (anat, func, ...)
     for img_type_idx = 1:length(image_types)
@@ -371,7 +396,6 @@ for rowIdx = 1:height(table)
                         table_preallocated.Session(rowIdx) = session;
                         table_preallocated.Type(rowIdx) = img_type;
                         table_preallocated.Modality(rowIdx) = modality;
-                        table_preallocated.Include(rowIdx) = true;
                     end
                 end
             end
@@ -380,18 +404,7 @@ for rowIdx = 1:height(table)
 
     % prepopulate acq tag by resolution for preop MRIs (just anat)
     if  ~strcmp(string(table_preallocated.Session(rowIdx)), 'postop') && ~strcmp(string(table_preallocated.Type(rowIdx)), 'func') && ~strcmp(string(table_preallocated.Type(rowIdx)), 'dwi')
-
-        resolution = imgs_resolution{rowIdx};
-
-        % is isometric resolution
-        acq_tags = {'sag', 'cor', 'ax'};
-        if range(resolution) < 0.05
-            table_preallocated.Acquisition(rowIdx) = "iso";
-            % is not isometric resolution
-        else
-            [~, idx] = max(resolution);
-            table_preallocated.Acquisition(rowIdx) = string(acq_tags{idx});
-        end
+        table_preallocated.Acquisition(rowIdx) = ea_checkacq(imgs_resolution{rowIdx});
     end
 
 end
@@ -413,7 +426,7 @@ end
 end
 
 %% ok button
-function ok_button_function(uiapp, table_options, dataset_folder, nii_folder, subjID, postop_modalities)
+function ok_button_function(uiapp, table_options, dataset_folder, nii_folder, subjID, postop_modalities, postop_acq_tags)
 
 % sanity checks first
 % if preop is empty
@@ -458,6 +471,7 @@ end
 
 % go through all the files, check if session, type and modality have been set correctly
 postop_modality_found = 0;
+postop_mri_found = 0;
 for i = find(uiapp.niiFileTable.Data.Include)'
     session = char(uiapp.niiFileTable.Data.Session(i));
     type = char(uiapp.niiFileTable.Data.Type(i));
@@ -473,12 +487,48 @@ for i = find(uiapp.niiFileTable.Data.Include)'
     if strcmp(session, 'postop') && any(strcmp(modality, postop_modalities))
         postop_modality_found = 1;
     end
+
+    if strcmp(session, 'postop') && strcmp(modality, 'MRI')
+        postop_mri_found = 1;
+    end
+
 end
 
+% if a postop image should be included and has not been set properly, catch this here
 if ~(postop_modality_found == 1) && ~(nopostop_set == 1)    % only halt if user has specified postop, but it has the wrong modality
-    warning_str = ['No valid modality for the postop session has been found, please choose one of the following:', newline, sprintf('%s, ', postop_modalities{:})];
+    warning_str = ['No valid modality for the postop session has been found, please choose one of the following:', newline, ...
+        sprintf('%s, ', postop_modalities{:})];
     uialert(uiapp.UIFigure, warning_str, 'Invalid file selection');
     return
+end
+
+% for the postop MRIs, check whether acquisition tags have been set correctly
+if ~(nopostop_set == 1) && postop_mri_found == 1
+
+    ax_postop_mri_found = 0;
+    for i = find(uiapp.niiFileTable.Data.Include)'
+        session = char(uiapp.niiFileTable.Data.Session(i));
+        modality = char(uiapp.niiFileTable.Data.Modality(i));
+        acq = char(uiapp.niiFileTable.Data.Acquisition(i));
+
+        % check if postop images have the correct modality
+        if strcmp(session, 'postop') && strcmp(modality, 'MRI')
+            if ~any(strcmp(acq, postop_acq_tags))
+                uialert(uiapp.UIFigure, 'For postop MRIs, the acquisition tag may only be set to <ax>, <sag> or <cor>.', 'Invalid acquisition tag in postop MRI');
+                return
+            end
+            if strcmp(acq, 'ax')
+                ax_postop_mri_found = 1;
+            end
+
+        end
+    end
+
+    if ~(ax_postop_mri_found == 1)
+        uialert(uiapp.UIFigure, 'No postop MRI with the acquisition <ax> found. At least one needs to be present that will be used to reconstruct electrode position.', ...
+            'Invalid acquisition tag in postop MRI');
+        return
+    end
 end
 
 anat_files = cell2struct(cell(1,N_sessions), table_options.Session, N_sessions);
@@ -547,8 +597,6 @@ if isempty(event)
     img_idx = 1;
 elseif isempty(event.Indices)
     img_idx = [];
-elseif event.Indices(2) ~= 2
-    img_idx = [];
 else
     img_idx = event.Indices(1);
 end
@@ -566,12 +614,18 @@ if ~isempty(img_idx)
     catch
         time_and_date_pretty = 'N/A';
     end
-    info_str = sprintf('Size:\t\t\t[%s x %s x %s x %s]\nPixel dimensions:\t[%.2f x %.2f x %.2f]\nAcquistion date:\t%s\nIntensity range:\t[%.0f, %.0f]\nHistogram range:\t[%.0f, %.0f]', ...
-        num2str(img.p.nii.hdr.dim(2)), num2str(img.p.nii.hdr.dim(3)), num2str(img.p.nii.hdr.dim(4)), num2str(img.p.nii.hdr.dim(5)), ...
+    info_str = sprintf(['Size:\t\t\t[%s x %s x %s x %s]\n', ...
+        'Pixel dimensions:\t[%.2f x %.2f x %.2f]\n', ...
+        'Acquistion date:\t%s\n', ...
+        'Intensity range:\t[%.0f, %.0f]\n', ...
+        'Histogram range:\t[%.0f, %.0f]\n', ...
+        'Flip:\t\t\t\t[%d %d %d]'], ...
+        num2str(img.p.nii.hdr.dim(2)),num2str(img.p.nii.hdr.dim(3)), num2str(img.p.nii.hdr.dim(4)), num2str(img.p.nii.hdr.dim(5)), ...
         img.p.pixdim(1), img.p.pixdim(2), img.p.pixdim(3), ...
         time_and_date_pretty, ...
         min(img.p.nii.img(:)), max(img.p.nii.img(:)), ...
-        min(img.img_thresholded), max(img.img_thresholded));
+        min(img.img_thresholded), max(img.img_thresholded), ...
+        img.p.flip(1), img.p.flip(2), img.p.flip(3));
 
     % if .json has been found, insert this into the info string as well
     if img.json_found == 1
@@ -597,44 +651,76 @@ if ~isempty(img_idx)
     % plot images
     setappdata(uiapp.UIFigure, 'img', img);
 
-    % axial
-    cut_slice = round(img.dim(3)/2);
-    imagesc(uiapp.axes_axi, img.p.nii.img(:, :, cut_slice));
-    uiapp.axes_axi.Colormap = gray(128);
-    setappdata(uiapp.UIFigure, 'cut_slice_axi', cut_slice); % save current cut slice for scrolling
-    uiapp.axes_axi.DataAspectRatioMode = 'manual';
-    uiapp.axes_axi.DataAspectRatio = [img.p.pixdim(1), img.p.pixdim(2), 1];
-    set(uiapp.axes_axi, 'view', [90, -90]);
-
     % coronal
     cut_slice = round(img.dim(2)/2);
-    imagesc(uiapp.axes_cor, squeeze(img.p.nii.img(:, cut_slice, :, 1)));
+    imagesc(uiapp.axes_cor, rot90(squeeze(img.p.nii.img(:, cut_slice, :, 1))), 'ButtonDownFcn', @(src, event) sliceButtonDownFunc(uiapp, event));
     uiapp.axes_cor.Colormap = gray(128);
     setappdata(uiapp.UIFigure, 'cut_slice_cor', cut_slice); % save current cut slice for scrolling
     uiapp.axes_cor.DataAspectRatioMode = 'manual';
-    uiapp.axes_cor.DataAspectRatio = [img.p.pixdim(1), img.p.pixdim(3), 1];
-    set(uiapp.axes_cor, 'view', [90, -90]);
+    uiapp.axes_cor.DataAspectRatio = [img.p.pixdim(3), img.p.pixdim(1), 1];
+
+    uiapp.axes_cor.YLabel.String = 'L';
+    uiapp.axes_cor.YLabel.Color = 'w';
+    uiapp.axes_cor.YLabel.Rotation = 0;
+    uiapp.axes_cor.YLabel.Position(2) = img.dim(3)/2 + uiapp.axes_cor.YLabel.Extent(4)/2;
+    uiapp.axes_cor.YLabel.Position(1) = -3;
+
+    uiapp.axes_cor.Title.String = 'S';
+    uiapp.axes_cor.Title.Color = 'w';
+    uiapp.axes_cor.Title.Position(1:2) = [img.dim(1)/2, 0];
 
     % sagittal
     cut_slice = round(img.dim(1)/2);
-    imagesc(uiapp.axes_sag, squeeze(img.p.nii.img(cut_slice, :, :, 1)));
+    imagesc(uiapp.axes_sag, rot90(squeeze(img.p.nii.img(cut_slice, :, :, 1))), 'ButtonDownFcn', @(src, event) sliceButtonDownFunc(uiapp, event));
     uiapp.axes_sag.Colormap = gray(128);
     setappdata(uiapp.UIFigure, 'cut_slice_sag', cut_slice); % save current cut slice for scrolling
     uiapp.axes_sag.DataAspectRatioMode = 'manual';
-    uiapp.axes_sag.DataAspectRatio = [img.p.pixdim(1), img.p.pixdim(3), 1];
-    set(uiapp.axes_sag, 'view', [90, -90]);
+    uiapp.axes_sag.DataAspectRatio = [img.p.pixdim(3), img.p.pixdim(2), 1];
+
+    uiapp.axes_sag.YLabel.String = 'P';
+    uiapp.axes_sag.YLabel.Color = 'w';
+    uiapp.axes_sag.YLabel.Rotation = 0;
+    uiapp.axes_sag.YLabel.Position(2) = img.dim(3)/2 + uiapp.axes_sag.YLabel.Extent(4)/2;
+    uiapp.axes_sag.YLabel.Position(1) = -3;
+
+    uiapp.axes_sag.Title.String = 'S';
+    uiapp.axes_sag.Title.Color = 'w';
+    uiapp.axes_sag.Title.Position(1:2) = [img.dim(2)/2, 0];
+
+    % axial
+    cut_slice = round(img.dim(3)/2);
+    imagesc(uiapp.axes_axi, rot90(img.p.nii.img(:, :, cut_slice)), 'ButtonDownFcn', @(src, event) sliceButtonDownFunc(uiapp, event));
+    uiapp.axes_axi.Colormap = gray(128);
+    setappdata(uiapp.UIFigure, 'cut_slice_axi', cut_slice); % save current cut slice for scrolling
+    uiapp.axes_axi.DataAspectRatioMode = 'manual';
+    uiapp.axes_axi.DataAspectRatio = [img.p.pixdim(2), img.p.pixdim(1), 1];
+
+    uiapp.axes_axi.YLabel.String = 'L';
+    uiapp.axes_axi.YLabel.Color = 'w';
+    uiapp.axes_axi.YLabel.Rotation = 0;
+    uiapp.axes_axi.YLabel.Position(2) = img.dim(2)/2 + uiapp.axes_axi.YLabel.Extent(4)/2;
+    uiapp.axes_axi.YLabel.Position(1) = -3;
+
+    uiapp.axes_axi.Title.String = 'S';
+    uiapp.axes_axi.Title.Color = 'w';
+    uiapp.axes_axi.Title.Position(1:2) = [img.dim(1)/2, 0];
+
+    update_crosschairs(uiapp, img.dim);
 end
 end
 
 %% scroll images
 function scroll_nii(uiapp, event)
 
-hAxes = checkMousePointer(uiapp.UIFigure, uiapp.RightPanel);
+axesTag = getMousePointerAxes(uiapp.UIFigure, uiapp.RightPanel);
 img = getappdata(uiapp.UIFigure, 'img');
 dim = img.dim;
 
-if ~isempty(hAxes)
-    switch hAxes.Tag
+if ~isempty(axesTag)
+    sliceUpdated.cor = 0;
+    sliceUpdated.sag = 0;
+    sliceUpdated.axi = 0;
+    switch axesTag
         case 'axi'
             sliceNr = getappdata(uiapp.UIFigure, 'cut_slice_axi');
             if event.VerticalScrollCount == -1 % up scroll
@@ -647,8 +733,9 @@ if ~isempty(hAxes)
                 end
 
             end
-            imagesc(uiapp.axes_axi, img.p.nii.img(:, :, sliceNr));
+            imagesc(uiapp.axes_axi, rot90(img.p.nii.img(:, :, sliceNr)), 'ButtonDownFcn', @(src, event) sliceButtonDownFunc(uiapp, event));
             setappdata(uiapp.UIFigure, 'cut_slice_axi', sliceNr);
+            sliceUpdated.axi = 1;
         case 'cor'
             sliceNr = getappdata(uiapp.UIFigure, 'cut_slice_cor');
             if event.VerticalScrollCount == -1 % up scroll
@@ -661,8 +748,9 @@ if ~isempty(hAxes)
                 end
 
             end
-            imagesc(uiapp.axes_cor, squeeze(img.p.nii.img(:, sliceNr, :, 1)));
+            imagesc(uiapp.axes_cor, rot90(squeeze(img.p.nii.img(:, sliceNr, :, 1))), 'ButtonDownFcn', @(src, event) sliceButtonDownFunc(uiapp, event));
             setappdata(uiapp.UIFigure, 'cut_slice_cor', sliceNr);
+            sliceUpdated.cor = 1;
         case 'sag'
             sliceNr = getappdata(uiapp.UIFigure, 'cut_slice_sag');
             if event.VerticalScrollCount == -1 % up scroll
@@ -675,17 +763,115 @@ if ~isempty(hAxes)
                 end
 
             end
-            imagesc(uiapp.axes_sag, squeeze(img.p.nii.img(sliceNr, :, :, 1)));
+            imagesc(uiapp.axes_sag, rot90(squeeze(img.p.nii.img(sliceNr, :, :, 1))), 'ButtonDownFcn', @(src, event) sliceButtonDownFunc(uiapp, event));
             setappdata(uiapp.UIFigure, 'cut_slice_sag', sliceNr);
-        otherwise
+            sliceUpdated.sag = 1;
+    end
+    update_crosschairs(uiapp, dim, sliceUpdated);
+end
 
+end
+
+%% update cross
+function update_crosschairs(uiapp, dim, sliceUpdated)
+    corSliceNr = getappdata(uiapp.UIFigure, 'cut_slice_cor'); % y, dim(2)
+    sagSliceNr = getappdata(uiapp.UIFigure, 'cut_slice_sag'); % x, dim(1)
+    axiSliceNr = getappdata(uiapp.UIFigure, 'cut_slice_axi'); % z, dim(3)
+    
+    if ~exist('sliceUpdated', 'var')
+        sliceUpdated.cor = 0;
+        sliceUpdated.sag = 0;
+        sliceUpdated.axi = 0;
+    end
+
+    corAxesHorzLine = findobj(uiapp.axes_cor, 'Type', 'Line', 'Tag', 'HorzLine'); % horz line is axi slice
+    if isempty(corAxesHorzLine) || sliceUpdated.axi
+        if sliceUpdated.axi
+            delete(corAxesHorzLine);
+        end
+        line(uiapp.axes_cor, [1, dim(1)], [dim(3)-axiSliceNr, dim(3)-axiSliceNr], 'Color', 'b', 'LineWidth', 1, 'Tag', 'HorzLine');
+    end
+
+    corAxesVertLine = findobj(uiapp.axes_cor, 'Type', 'Line', 'Tag', 'VertLine'); % vert line is sag slice
+    if isempty(corAxesVertLine) || sliceUpdated.sag
+        if sliceUpdated.sag
+            delete(corAxesVertLine);
+        end
+        line(uiapp.axes_cor, [sagSliceNr, sagSliceNr], [1, dim(3)], 'Color', 'b', 'LineWidth', 1, 'Tag', 'VertLine');
+    end
+
+    sagAxesHorzLine = findobj(uiapp.axes_sag, 'Type', 'Line', 'Tag', 'HorzLine'); % horz line is axi slice
+    if isempty(sagAxesHorzLine) || sliceUpdated.axi
+        if sliceUpdated.axi
+            delete(sagAxesHorzLine);
+        end
+        line(uiapp.axes_sag, [1, dim(2)], [dim(3)-axiSliceNr, dim(3)-axiSliceNr], 'Color', 'b', 'LineWidth', 1, 'Tag', 'HorzLine');
+    end
+
+    sagAxesVertLine = findobj(uiapp.axes_sag, 'Type', 'Line', 'Tag', 'VertLine'); % vert line is cor slice
+    if isempty(sagAxesVertLine) || sliceUpdated.cor
+        if sliceUpdated.cor
+            delete(sagAxesVertLine);
+        end
+        line(uiapp.axes_sag, [corSliceNr, corSliceNr], [1, dim(3)], 'Color', 'b', 'LineWidth', 1, 'Tag', 'VertLine');
+    end
+
+    axiAxesHorzLine = findobj(uiapp.axes_axi, 'Type', 'Line', 'Tag', 'HorzLine'); % horz line is cor slice
+    if isempty(axiAxesHorzLine) || sliceUpdated.cor
+        if sliceUpdated.cor
+            delete(axiAxesHorzLine);
+        end
+        line(uiapp.axes_axi, [1, dim(1)], [dim(2)-corSliceNr, dim(2)-corSliceNr], 'Color', 'b', 'LineWidth', 1, 'Tag', 'HorzLine');
+    end
+
+    axiAxesVertLine = findobj(uiapp.axes_axi, 'Type', 'Line', 'Tag', 'VertLine'); % vert line is sag slice
+    if isempty(axiAxesVertLine) || sliceUpdated.sag
+        if sliceUpdated.sag
+            delete(axiAxesVertLine);
+        end
+        line(uiapp.axes_axi, [sagSliceNr, sagSliceNr], [1, dim(2)], 'Color', 'b', 'LineWidth', 1, 'Tag', 'VertLine');
     end
 end
 
+%% Button down on axes
+function sliceButtonDownFunc(uiapp, event)
+    img = getappdata(uiapp.UIFigure, 'img');
+    dim = img.dim;
+    if ~isempty(img)
+        x = round(event.IntersectionPoint(1));
+        y = round(event.IntersectionPoint(2));
+        sliceUpdated.cor = 0;
+        sliceUpdated.sag = 0;
+        sliceUpdated.axi = 0;
+        switch event.Source.Parent.Tag
+            case 'cor'
+                imagesc(uiapp.axes_sag, rot90(squeeze(img.p.nii.img(x, :, :))), 'ButtonDownFcn', @(src, event) sliceButtonDownFunc(uiapp, event));
+                setappdata(uiapp.UIFigure, 'cut_slice_sag', x);
+                sliceUpdated.sag = 1;
+                imagesc(uiapp.axes_axi, rot90(img.p.nii.img(:, :, dim(3)-y)), 'ButtonDownFcn', @(src, event) sliceButtonDownFunc(uiapp, event));
+                setappdata(uiapp.UIFigure, 'cut_slice_axi', dim(3)-y);
+                sliceUpdated.axi = 1;
+            case 'sag'
+                imagesc(uiapp.axes_cor, rot90(squeeze(img.p.nii.img(:, x, :))), 'ButtonDownFcn', @(src, event) sliceButtonDownFunc(uiapp, event));
+                setappdata(uiapp.UIFigure, 'cut_slice_cor', x);
+                sliceUpdated.cor = 1;
+                imagesc(uiapp.axes_axi, rot90(img.p.nii.img(:, :, dim(3)-y)), 'ButtonDownFcn', @(src, event) sliceButtonDownFunc(uiapp, event));
+                setappdata(uiapp.UIFigure, 'cut_slice_axi', dim(3)-y);
+                sliceUpdated.axi = 1;
+            case 'axi'
+                imagesc(uiapp.axes_sag, rot90(squeeze(img.p.nii.img(x, :, :))), 'ButtonDownFcn', @(src, event) sliceButtonDownFunc(uiapp, event));
+                setappdata(uiapp.UIFigure, 'cut_slice_sag', x);
+                sliceUpdated.sag = 1;
+                imagesc(uiapp.axes_cor, rot90(squeeze(img.p.nii.img(:, dim(2)-y, :))), 'ButtonDownFcn', @(src, event) sliceButtonDownFunc(uiapp, event));
+                setappdata(uiapp.UIFigure, 'cut_slice_cor', dim(2)-y);
+                sliceUpdated.cor = 1;
+        end
+        update_crosschairs(uiapp, dim, sliceUpdated);
+    end
 end
 
 %% check where the mouse pointer is
-function h = checkMousePointer(fig, panel)
+function axesTag = getMousePointerAxes(fig, panel)
 
 oldUnits = get(0,'units');
 set(0,'units','pixels');
@@ -714,10 +900,11 @@ for h = c'
     % If descendant contains the mouse pointer position, exit
 
     if (p(1) > x_lower) && (p(1) < x_upper) && (p(2) > y_lower) && (p(2) < y_upper)
+        axesTag = h.Tag;
         return
     end
 end
-h = [];
+axesTag = [];
 end
 
 function [p, frm, rg, dim] = read_nii(fname, ask_code, reOri)

@@ -22,7 +22,7 @@ function varargout = lead_group(varargin)
 
 % Edit the above text to modify the response to help lead_group
 
-% Last Modified by GUIDE v2.5 13-Nov-2020 13:22:10
+% Last Modified by GUIDE v2.5 08-Aug-2022 23:55:43
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -216,6 +216,7 @@ if strcmp(target, 'groupDir')
         % save M
         ea_refresh_lg(handles);
         M = getappdata(handles.leadfigure,'M');
+
         disp('Saving data to disk...');
         try
             save(ea_getGroupAnalysisFile(handles.groupdir_choosebox.String),'M','-v7.3');
@@ -228,25 +229,56 @@ if strcmp(target, 'groupDir')
     end
 
     % Multiple folder dragged or not a proper BIDS folder
-    if length(folders) > 1 || ...
-            ~contains(folders{1}, ['derivatives', filesep, 'leadgroup', filesep]) && ~isfolder(fullfile(folders{1}, 'derivatives'))
+    if length(folders) > 1
         ea_error('Please drag either a dataset root folder or a group analysis folder into Lead Group!', 'Error', dbstack);
     end
 
     if isfile(folders{1}) % Group analysis mat file dragged
-        if ~isempty(regexp(folders{1}, ['\', filesep, 'dataset-.+_analysis-.+\.mat$'], 'match', 'once'))
+        if ~isempty(regexp(folders{1}, ['derivatives\', filesep, 'leadgroup\', filesep, '.+\', filesep, 'dataset-.+_analysis-.+\.mat$'], 'match', 'once'))
+            % Group analysis file within dataset folder
             groupdir = [fileparts(folders{1}), filesep];
             load(folders{1}, 'M');
+
+            datasetFolder = regexp(groupdir, ['(.*)(?=\', filesep, 'derivatives\', filesep, 'leadgroup)'], 'match', 'once');
+            if isfile(fullfile(datasetFolder, 'miniset.json'))
+                for p = 1:size(M.patient.list,1)
+                    [~, patient_tag] = fileparts(M.patient.list{p});
+                    M.patient.list{p} = fullfile(datasetFolder, 'derivatives', 'leaddbs', patient_tag);
+                end
+                M.root = groupdir;
+                save(folders{1}, 'M')
+            end
+        elseif ~isempty(regexp(folders{1}, ['\', filesep, 'dataset-.+_analysis-.+\.mat$'], 'match', 'once'))
+            % Orphan group analysis file, will create proper dataset folder
+            [groupdir, analysisFile] = ea_genDatasetFromGroupAnalysis(folders{1});
+            load(analysisFile, 'M');
         else
             ea_error('Not a Lead Group Analysis file!', 'Error', dbstack);
         end
     else % Dataset root folder or group analysis folder dragged
+        if ~contains(folders{1}, ['derivatives', filesep, 'leadgroup', filesep]) && ~isfolder(fullfile(folders{1}, 'derivatives'))
+            analysisFile = ea_regexpdir(folders{1}, '^dataset-[^\W_]+_analysis-[^\W_]+\.mat$', 0);
+            if ~isempty(analysisFile)
+               folders{1} = ea_genDatasetFromGroupAnalysis(analysisFile{1});
+            end
+        end
         analysisFile = ea_getGroupAnalysisFile(folders{1});
         if isempty(analysisFile) % Create new analysis file in case not found
             analysisFile = ea_genGroupAnalysisFile(folders{1});
         end
         groupdir = [fileparts(analysisFile), filesep];
         load(analysisFile, 'M');
+
+        datasetFolder = regexp(groupdir, ['(.*)(?=\', filesep, 'derivatives\', filesep, 'leadgroup)'], 'match', 'once');
+        if isfile(fullfile(datasetFolder, 'miniset.json'))
+            for p = 1:size(M.patient.list,1)
+                [~, patient_tag] = fileparts(M.patient.list{p});
+                M.patient.list{p} = fullfile(datasetFolder, 'derivatives', 'leaddbs', patient_tag);
+            end
+            M.root = groupdir;
+            save(analysisFile, 'M')
+        end
+
     end
 
     set(handles.groupdir_choosebox, 'String', groupdir);
@@ -340,6 +372,12 @@ groupdir = uigetdir;
 if ~groupdir % user pressed cancel
     return
 else
+    if ~contains(groupdir, ['derivatives', filesep, 'leadgroup', filesep]) && ~isfolder(fullfile(groupdir, 'derivatives'))
+        analysisFile = ea_regexpdir(groupdir, '^dataset-[^\W_]+_analysis-[^\W_]+\.mat$', 0);
+        if ~isempty(analysisFile)
+           groupdir = ea_genDatasetFromGroupAnalysis(analysisFile{1});
+        end
+    end
     analysisFile = ea_getGroupAnalysisFile(groupdir);
     if isempty(analysisFile) % Create new analysis file in case not found
         analysisFile = ea_genGroupAnalysisFile(groupdir);
@@ -552,7 +590,7 @@ npts=length(uipatdirs);
 if options.prefs.env.dev && get(handles.mercheck,'Value')
     filename=fullfile(options.root,options.patientname,'ea_groupvisdata.mat');
     if exist(filename,'file')
-       choice = ea_questdlg(sprintf('Group Data Found. Would you like to load %s now?',filename),...
+       choice = questdlg(sprintf('Group Data Found. Would you like to load %s now?',filename),...
            'Yes','No');
     end
 
@@ -993,8 +1031,11 @@ for pt=selection
 
     resultfig=ea_elvis(options,M.elstruct(pt));
 
-    if isempty(dir([options.subj.norm.transform.inverseBaseName,'*']))
-        warning(['Tranformation not found for ', options.subj.subjId, '!']);
+    if ~isfield(options.subj, 'norm')
+        ea_cprintf('CmdWinWarnings', 'Running in Miniset mode: %s...\n', options.subj.subjId);
+        volumespresent=0;
+    elseif isempty(dir([options.subj.norm.transform.inverseBaseName, '*']))
+        ea_cprintf('CmdWinWarnings', 'Tranformation not found for %s...\n', options.subj.subjId);
         volumespresent=0;
     else
         volumespresent=1;
@@ -1022,7 +1063,7 @@ for pt=selection
         options.orignative=options.native; % backup
         options.native=~ea_getprefs('vatsettings.estimateInTemplate'); % see whether VTAs should be directly estimated in template space or not
         if options.native && ~volumespresent
-            warning(['You chose to process VTAs in native space but patient-data cannot be found for ',M.patient.list{pt},'. Proceeding with VTA calculation directly in template space.']);
+            ea_cprintf('CmdWinWarnings', 'Calculating VTA in template space since patient folder %s is incomplete.\n', options.subj.subjId);
             options.native=0;
         end
 
@@ -1268,7 +1309,7 @@ catch % too many entries..
     set(handles.labelpopup,'Value',1);
     options.labelatlas=1;
 end
-options.writeoutpm=1;
+options.writeoutpm = 0;
 options.colormap=parula(64);
 options.d3.write=1;
 options.d3.prolong_electrode=2;
@@ -1718,8 +1759,19 @@ function exportstats_Callback(hObject, eventdata, handles)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 M = getappdata(gcf,'M');
-[file, path] = uiputfile('*.mat','Export DBS Stats as...', fullfile(M.root, 'ea_stats_export.mat'));
+exportFile = strrep(ea_getGroupAnalysisFile(M.root), '.mat', '_desc-stats_export.mat');
+[file, path] = uiputfile('*.mat','Export DBS Stats as...', exportFile);
 if file % make sure user didnt press cancel
     ea_lg_exportstats(M, [path, file]);
     fprintf('\nDBS Stats exported to:\n%s\n\n', [path, file]);
 end
+
+
+
+% --- Executes on button press in minisetbutton.
+function minisetbutton_Callback(hObject, eventdata, handles)
+% hObject    handle to minisetbutton (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+M = getappdata(gcf,'M');
+ea_generate_min_dataset(M);

@@ -43,7 +43,7 @@ catch
     M.isomatrix_name={};
 end
 
-M.ui.groupdir = [handles.groupdir_choosebox.String,filesep];
+M.ui.groupdir = fullfile(handles.groupdir_choosebox.String,filesep);
 
 disp('Refreshing selections on VI / FC Lists...');
 
@@ -316,7 +316,8 @@ if ~isfield(M.ui,'lastupdated') || t-M.ui.lastupdated>0 % 0 mins time limit
         for pt=1:length(M.patient.list)
             % (re-)load stats
             try
-                statsFile = [M.patient.list{pt}, filesep, options.patientname, '_desc-stats.mat'];
+                [~, patientname] = fileparts(M.patient.list{pt});
+                statsFile = [M.patient.list{pt}, filesep, patientname, '_desc-stats.mat'];
                 load(statsFile, 'ea_stats');
                 ea_stats=ea_rmssstimulations(ea_stats,M); % only preserve stimulations with label 'gs_groupid'.
                 M.stats(pt).ea_stats=ea_stats;
@@ -328,8 +329,10 @@ if ~isfield(M.ui,'lastupdated') || t-M.ui.lastupdated>0 % 0 mins time limit
                     % also correct single subject file:
                     load(statsFile, 'ea_stats');
                     ea_stats.atlases=M.stats(pt).ea_stats.atlases;
-                    save(statsFile,'ea_stats','-v7.3');
+                    save(statsFile, 'ea_stats', '-v7.3');
                 end
+            catch ME
+                ea_cprintf('CmdWinWarnings', '%s\n', ME.message);
             end
             
             if ~isfield(M,'stats')
@@ -549,9 +552,11 @@ end
 function ea_stats=ea_rmssstimulations(ea_stats,M)
 % function that will remove all stimulations not labeled 'gs'
 todel=[];
-for s=1:length(ea_stats.stimulation)
-    if ~strcmp(ea_stats.stimulation(s).label,['gs_',M.guid])
-        todel=[todel,s];
+if isfield(ea_stats, 'stimulation')
+    for s=1:length(ea_stats.stimulation)
+        if ~strcmp(ea_stats.stimulation(s).label,['gs_',M.guid])
+            todel=[todel,s];
+        end
     end
+    ea_stats.stimulation(todel)=[];
 end
-ea_stats.stimulation(todel)=[];

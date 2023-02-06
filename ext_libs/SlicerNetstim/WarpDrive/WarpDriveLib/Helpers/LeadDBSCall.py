@@ -1,236 +1,132 @@
-import vtk, qt, slicer
-import os, sys, shutil
-import uuid
-from scipy import io
-import numpy as np
-from subprocess import call
+import vtk, qt, ctk, slicer
+import os, sys, platform
 import json
+import shutil
 import glob
 
-from . import WarpDriveUtil, GridNodeHelper
-
-def checkExtensionInstall(extensionName):
-  em = slicer.app.extensionsManagerModel()
-  if not em.isExtensionInstalled(extensionName):
-    extensionMetaData = em.retrieveExtensionMetadataByName(extensionName)
-    url = os.path.join(em.serverUrl().toString(), 'download', 'item', extensionMetaData['item_id'])
-    extensionPackageFilename = os.path.join(slicer.app.temporaryPath, extensionMetaData['md5'])
-    slicer.util.downloadFile(url, extensionPackageFilename)
-    em.installExtension(extensionPackageFilename)
-    qt.QMessageBox.information(qt.QWidget(), '', 'Slicer will install %s and quit.\nPlease restart.' % extensionName)
-    slicer.util.exit()
-    return True
-
-def updateParameterNodeFromArgs(parameterNode): 
-  if parameterNode.GetParameter("MNIPath") != '':
-    return # was already called
-
-  args = sys.argv
-  if (len(sys.argv) > 2) and os.path.isfile(os.path.join(sys.argv[1],'lead.m')):
-    pathsSeparator = uuid.uuid4().hex
-    subjectPaths = pathsSeparator.join(sys.argv[2:])
-    subjectPath = subjectPaths.split(pathsSeparator)[0]
-    leadDBSPath = sys.argv[1]
-    slicer.app.settings().setValue("NetstimPreferences/leadDBSPath", leadDBSPath)
-    MNIPath = os.path.join(leadDBSPath,'templates','space','MNI152NLin2009bAsym')
-    MNIAtlasPath = os.path.join(MNIPath,'atlases')
-    if sys.platform == "darwin":
-      ext = "maci64"
-    elif sys.platform.startswith('win'):
-      ext = 'exe'
-    else:
-      ext = 'glnxa64'
-    antsApplyTransformsPath = os.path.join(leadDBSPath,'ext_libs','ANTs','antsApplyTransforms.' + ext)
-    # set parameter node
-    parameterNode.SetParameter("separator", pathsSeparator)
-    parameterNode.SetParameter("subjectPaths", subjectPaths)
-    parameterNode.SetParameter("subjectN", "0")
-    parameterNode.SetParameter("subjectPath", subjectPath)
-    parameterNode.SetParameter("MNIPath", MNIPath)
-    parameterNode.SetParameter("MNIAtlasPath", MNIAtlasPath)
-    parameterNode.SetParameter("antsApplyTransformsPath", antsApplyTransformsPath)
-    parameterNode.SetNodeReferenceID("ImageNode", None)
-    parameterNode.SetNodeReferenceID("TemplateNode", None)
-    return True
-
-class LeadBIDS():
-  def __init__(self, subjectPath):
-    self.subjectPath = subjectPath
-    self.subjectID = os.path.split(self.subjectPath)[-1]
-  
-  def getNormalizationMethod(self):
-    return os.path.join(self.getNormalizationPath(), 'log', self.subjectID + '_desc-normmethod.json')
-
-  def getCoregImages(self, modality='*'):
-    return glob.glob(os.path.join(self.subjectPath, 'coregistration', 'anat', self.subjectID + '*ses-preop_acq-*_' + modality + '.nii'))
-
-  def getNormalizedImages(self):
-    return glob.glob(os.path.join(self.subjectPath, 'normalization', 'anat', self.subjectID + '*ses-preop*.nii'))
-
-  def getANTSForwardWarp(self):
-    return os.path.join(self.getNormalizationPath(), 'transformations', self.subjectID + '_from-anchorNative_to-MNI152NLin2009bAsym_desc-ants.nii.gz')
-
-  def getANTSInverseWarp(self):
-    return os.path.join(self.getNormalizationPath(), 'transformations', self.subjectID + '_from-MNI152NLin2009bAsym_to-anchorNative_desc-ants.nii.gz')
-
-  def getNormalizationPath(self):
-    return os.path.join(self.subjectPath, 'normalization')
-
-  def getWarpDrivePath(self):
-    return os.path.join(self.subjectPath, 'warpdrive')
-
-def saveApprovedData(subjectPath):
-  normalizationMethodFile = LeadBIDS(subjectPath).getNormalizationMethod()
-  with open(normalizationMethodFile, 'a+') as f:
+def getApprovedData(normalizationMethodFile):
+  with open(normalizationMethodFile, 'r') as f:
     normalizationMethod = json.load(f)
-    normalizationMethod['approval'] = 1
-    f.seek(0)
+    value = normalizationMethod['approval']
+  return value
+
+def setApprovedData(normalizationMethodFile, value):
+  with open(normalizationMethodFile, 'r') as f:
+    normalizationMethod = json.load(f)
+    normalizationMethod['approval'] = value
+  with open(normalizationMethodFile, 'w') as f:
     json.dump(normalizationMethod, f)
-    f.truncate()
 
-def loadSubjectTransform(subjectPath, antsApplyTransformsPath):
+def applyChanges(inputNode, imageNode, forwardWarpPath, inverseWarpPath, subjectWarpDrivePath, referenceVolumePath, useExternalInstance):
 
-  transformPath = LeadBIDS(subjectPath).getANTSForwardWarp()
+  correctionsTransformNodeID = inputNode.GetTransformNodeID()
 
-  # update subject warp fields to new lead dbs specification
-  if os.path.isfile(transformPath.replace('.nii.gz','.h5')):
-    updateTranform(subjectPath, antsApplyTransformsPath)
+  forwardParams = {
+    "inputTransform1File": forwardWarpPath,
+    "inputTransform2Node": correctionsTransformNodeID,
+    "inputReferenceVolumeFile" : referenceVolumePath,
+    "outputFileName" : forwardWarpPath
+    } 
 
-  # load glanat composite
-  glanatCompositeNode = slicer.util.loadTransform(transformPath)
+  inverseParams = {
+    "inputTransform1Node": correctionsTransformNodeID,
+    "inputTransform2File": inverseWarpPath,
+    "inputReferenceVolumeFile" : imageNode.GetStorageNode().GetFileName(),
+    "outputFileName" : inverseWarpPath
+    }
+
+  forwardCliNode = slicer.cli.createNode(slicer.modules.compositetogridtransform, forwardParams)
+  forwardCliNode.SetName('forwardCompositeToGrid')
+  inverseCliNode = slicer.cli.createNode(slicer.modules.compositetogridtransform, inverseParams)
+  inverseCliNode.SetName('inverseCompositeToGrid')
+
+  subName = os.path.basename(os.path.dirname(subjectWarpDrivePath))
+  tmpScenePath = os.path.join(subjectWarpDrivePath, 'tmpScene')
+  python_commands = 'w = slicer.modules.compositetogridtransform.createNewWidgetRepresentation();\
+                    w.show();\
+                    w.setWindowTitle(\'WarpDrive\');\
+                    w.children()[2].hide();\
+                    w.children()[4].hide();\
+                    w.children()[5].hide();\
+                    w.children()[6].hide();\
+                    w.children()[7].hide();\
+                    w.setCurrentCommandLineModuleNode(forwardCliNode);\
+                    txt = ctk.ctkFittedTextBrowser(w);\
+                    txt.setHtml(\'Subject: '+subName+'.<br><br>Saving changes to the normalization transformation files.<br><br>This window is independent of Slicer and Lead-DBS and will close when finished.\');\
+                    w.children()[1].insertWidget(0,txt);\
+                    w.resize(w.width,w.height/2);\
+                    qt.QApplication.processEvents();\
+                    forwardCliNode.AddObserver(\'ModifiedEvent\', lambda c,e,w=w,icli=inverseCliNode: [slicer.util.getNode(c.GetParameterAsString(\'inputTransform2Node\')).Inverse(), w.setCurrentCommandLineModuleNode(icli), slicer.cli.run(slicer.modules.compositetogridtransform, icli)] if (c.GetStatus() == c.Completed) else None);\
+                    inverseCliNode.AddObserver(\'ModifiedEvent\', lambda c,e,w=w,: [shutil.rmtree(r\''+tmpScenePath+'\') if os.path.isdir(r\''+tmpScenePath+'\') else None, w.close(), slicer.util.exit(0)] if (c.GetStatus() == c.Completed) else None);\
+                    slicer.cli.run(slicer.modules.compositetogridtransform, forwardCliNode)'
+
+  if useExternalInstance:
+
+    if os.path.isdir(tmpScenePath):
+      shutil.rmtree(tmpScenePath)
+    os.mkdir(tmpScenePath)
+
+    tmpScene = slicer.vtkMRMLScene()
+    slicer.mrmlScene.CopyDefaultNodesToScene(tmpScene)
+    tmpScene.AddNode(forwardCliNode)
+    tmpScene.AddNode(inverseCliNode)
+    tmpScene.AddNode(slicer.util.getNode(correctionsTransformNodeID))
+    tmpScene.SaveSceneToSlicerDataBundleDirectory(tmpScenePath)
+    tmpScene.Clear()
+    del tmpScene
+
+    slicerInstallPath = os.path.dirname(os.path.dirname(sys.executable))
+    if platform.system() == 'Darwin':
+      slicerPath = os.path.join(slicerInstallPath, 'MacOS', 'Slicer')
+    elif platform.system() == 'Linux':
+      slicerPath = os.path.join(slicerInstallPath, 'Slicer')
+    elif platform.system() == 'Windows':
+      slicerPath = os.path.join(slicerInstallPath, 'Slicer.exe')
+    
+    slicerNetstimModule = glob.glob(os.path.join(slicerInstallPath,'**','SlicerNetstim','**','cli-modules'),recursive=True)[0]
+    
+    commands = [slicerPath, 
+                '--ignore-slicerrc', 
+                '--no-main-window', 
+                '--disable-settings',
+                '--additional-module-paths', slicerNetstimModule,
+                '--python-code', 'import os, shutil, ctk;\
+                                  loadScene(r\''+os.path.join(tmpScenePath,'tmpScene.mrml')+'\');\
+                                  forwardCliNode = slicer.mrmlScene.GetFirstNodeByName(\'forwardCompositeToGrid\');\
+                                  inverseCliNode = slicer.mrmlScene.GetFirstNodeByName(\'inverseCompositeToGrid\');'\
+                                  + python_commands]
+
+    import subprocess
+    subprocess.Popen(commands, env=slicer.util.startupEnvironment())
   
-  return glanatCompositeNode
-
-def updateTranform(directory, antsApplyTransformsPath):
-  bidsSubject = LeadBIDS(directory)
-  transforms = [bidsSubject.getANTSForwardWarp(), bidsSubject.getANTSInverseWarp()]
-  references = [bidsSubject.getNormalizedImages()[0], bidsSubject.getCoregImages()[0]]
-  for transform,reference in zip(transforms,references):
-    transformFullPath = os.path.join(directory,transform + '.h5') # in case inverse doesnt exist
-    if os.path.isfile(transformFullPath):
-      h5transform = transform.replace('.nii.gz','.h5')
-      command = antsApplyTransformsPath + " -r " + reference + " -t " + h5transform + " -o [" + transform + ",1] -v 1"
-      commandOut = call(command, env=slicer.util.startupEnvironment(), shell=True) # run antsApplyTransforms
-      os.remove(h5transform)
-  return True
-  
-def queryUserApproveSubject(subjectPath):
-  msgBox = qt.QMessageBox()
-  msgBox.setText('No corrections made')
-  msgBox.setInformativeText('Save subject as approved?')
-  msgBox.setStandardButtons(qt.QMessageBox().Save | qt.QMessageBox().Discard | qt.QMessageBox().Cancel)
-  ret = msgBox.exec_()
-  if ret == qt.QMessageBox().Cancel:
-    return False
-  if ret == qt.QMessageBox().Save:
-    saveApprovedData(subjectPath)
-  return True
-
-def applyChanges(subjectPath, inputNode, imageNode):
-
-  qt.QApplication.setOverrideCursor(qt.Qt.WaitCursor)
-  qt.QApplication.processEvents()
-  
-  # undo changes to image node
-  imageNode.SetAndObserveTransformNodeID(None)
-
-  # FORWARD
-  
-  size, origin, spacing = GridNodeHelper.getGridDefinition(inputNode)
-  # harden changes in input
-  inputNode.HardenTransform()
-  # to grid transform
-  outNode = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLTransformNode')
-  referenceVolume = GridNodeHelper.emptyVolume(size, origin, spacing)    
-  slicer.modules.transforms.logic().ConvertToGridTransform(inputNode, referenceVolume, outNode)
-  # set to input and delete aux
-  inputNode.SetAndObserveTransformFromParent(outNode.GetTransformFromParent())
-  slicer.mrmlScene.RemoveNode(outNode)
-  slicer.mrmlScene.RemoveNode(referenceVolume)
-  # save
-  slicer.util.saveNode(inputNode, LeadBIDS(subjectPath).getANTSForwardWarp())
-
-  # BACKWARD
-
-  inputNode.Inverse()
-  # to grid
-  outNode = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLTransformNode')
-  slicer.modules.transforms.logic().ConvertToGridTransform(inputNode, imageNode, outNode)
-  # save
-  slicer.util.saveNode(outNode, LeadBIDS(subjectPath).getANTSInverseWarp())
-  # delete aux node
-  slicer.mrmlScene.RemoveNode(outNode)
-  
-  # back to original
-  inputNode.Inverse()
-  imageNode.SetAndObserveTransformNodeID(inputNode.GetID())
-  
-  qt.QApplication.setOverrideCursor(qt.QCursor(qt.Qt.ArrowCursor))
+  else:
+    exec(python_commands)
+    slicer.util.mainWindow().hide()
 
 
-def setTargetFiducialsAsFixed():
-  shNode = slicer.mrmlScene.GetSubjectHierarchyNode()
-  fiducialNodes = slicer.mrmlScene.GetNodesByClass('vtkMRMLMarkupsFiducialNode')
-  fiducialNodes.UnRegister(slicer.mrmlScene)
-  for i in range(fiducialNodes.GetNumberOfItems()):
-    fiducialNode = fiducialNodes.GetItemAsObject(i)
-    if 'target' in shNode.GetItemAttributeNames(shNode.GetItemByDataNode(fiducialNode)):
-      # get parent folder
-      parentFolder = shNode.GetItemDataNode(shNode.GetItemParent(shNode.GetItemByDataNode(fiducialNode)))
-      parentFolderName = parentFolder.GetName()
-      # remove target attribute
-      shNode.RemoveItemAttribute(shNode.GetItemByDataNode(fiducialNode), 'target')
-      # add as fixed point
-      WarpDriveUtil.addFixedPoint(fiducialNode)
-      # remove correction
-      removeNodeAndChildren(parentFolder)
-      # change fixed point name
-      fiducialNode.SetName(parentFolderName)
-
-def saveCurrentScene(subjectPath):
+def saveSourceTarget(warpDriveSavePath, sourceNode, targetNode):
   """
-  Save corrections and fixed points is subject directory so will be loaded next time
+  Save source and target in subject directory so will be loaded next time
   """
-  warpDriveSavePath = LeadBIDS(subjectPath).getWarpDrivePath()
-  # delete previous
-  if os.path.isdir(warpDriveSavePath):
-    shutil.rmtree(warpDriveSavePath)
-  # create directories
-  os.mkdir(warpDriveSavePath)
-  os.mkdir(os.path.join(warpDriveSavePath,'Data'))
-  # set scene URL
-  slicer.mrmlScene.SetURL(os.path.join(warpDriveSavePath, 'WarpDriveScene.mrml'))
-  # save corrections
-  shNode = slicer.mrmlScene.GetSubjectHierarchyNode()
-  for nodeType, nodeExt in zip(['vtkMRMLMarkupsFiducialNode', 'vtkMRMLLabelMapVolumeNode'], ['.fcsv', '.nrrd']):
-    nodes = slicer.mrmlScene.GetNodesByClass(nodeType)
-    nodes.UnRegister(slicer.mrmlScene)
-    for i in range(nodes.GetNumberOfItems()):
-      node = nodes.GetItemAsObject(i)
-      if 'correction' in shNode.GetItemAttributeNames(shNode.GetItemByDataNode(node)):
-        slicer.util.saveNode(node, os.path.join(warpDriveSavePath, 'Data', uuid.uuid4().hex + nodeExt))
-  # save scene
-  slicer.mrmlScene.Commit()
+  if not os.path.isdir(warpDriveSavePath):
+    os.mkdir(warpDriveSavePath)  
+  slicer.util.saveNode(sourceNode, os.path.join(warpDriveSavePath, 'source.json'))
+  slicer.util.saveNode(targetNode, os.path.join(warpDriveSavePath, 'target.json'))
 
-def DeleteCorrections():
+def getAtlasesNamesInScene():
   shNode = slicer.mrmlScene.GetSubjectHierarchyNode()
-  # delete folders
   folderNodes = slicer.mrmlScene.GetNodesByClass('vtkMRMLFolderDisplayNode')
   folderNodes.UnRegister(slicer.mrmlScene)
+  names = []
   for i in range(folderNodes.GetNumberOfItems()):
     folderNode = folderNodes.GetItemAsObject(i)
-    if 'correction' in shNode.GetItemAttributeNames(shNode.GetItemByDataNode(folderNode)):
-      removeNodeAndChildren(folderNode)
+    if 'atlas' in shNode.GetItemAttributeNames(shNode.GetItemByDataNode(folderNode)):
+      if  shNode.GetItemParent(shNode.GetItemByDataNode(folderNode)) == shNode.GetSceneItemID():
+        names.append(folderNode.GetName())
+  return names
 
-def removeNodeAndChildren(node):
-  # get subject hierarchy node ID
-  shNode = slicer.mrmlScene.GetSubjectHierarchyNode()
-  nodeID = shNode.GetItemByDataNode(node)
-  # get children
-  removeIDs = vtk.vtkIdList()
-  shNode.GetItemChildren(nodeID, removeIDs, True)
-  # add selected ID
-  removeIDs.InsertNextId(nodeID)
-  # remove
-  for i in range(removeIDs.GetNumberOfIds()):
-    shNode.RemoveItem(removeIDs.GetId(i))
+def saveSceneInfo(warpDriveSavePath):
+  info = {}
+  info["atlasNames"] = getAtlasesNamesInScene()
+  with open(os.path.join(warpDriveSavePath,'info.json'), 'w') as jsonFile:
+    json.dump(info, jsonFile)

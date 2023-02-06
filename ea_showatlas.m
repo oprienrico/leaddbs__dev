@@ -56,12 +56,18 @@ for nativemni=nm % switch between native and mni space atlases.
         atlases.discfibersonly = 0;
     end
 
-    if options.writeoutstats && ~strcmp(options.leadprod, 'group')
-        statsFile = [options.root, options.patientname, filesep, options.patientname, '_desc-stats.mat'];
-        statsBackupFile = [options.root, options.patientname, filesep, options.patientname, '_desc-statsbackup.mat'];
+    if options.writeoutstats
+        if isfield(options, 'subj')
+            statsFile = options.subj.stats;
+            statsBackupFile = strrep(options.subj.stats, 'stats.mat', 'stats_backup.mat');
+        else % Visualization button clicked in Lead Group
+            groupAnalysisFile = ea_getGroupAnalysisFile([options.root, options.patientname]);
+            statsFile = strrep(groupAnalysisFile, '.mat', '_desc-stats.mat');
+            statsBackupFile = strrep(groupAnalysisFile, '.mat', '_desc-stats_backup.mat');
+        end
 
         try
-            load(statsFile);
+            load(statsFile, 'ea_stats');
             prioratlasnames=ea_stats.atlases.names;
         end
     end
@@ -181,8 +187,11 @@ for nativemni=nm % switch between native and mni space atlases.
 
                 atlassurfs{atlascnt,1}=atlases.roi{atlas,side};
                 colorbuttons(atlascnt)=atlases.roi{atlas,side}.toggleH;
-                
-                while 1
+                if ~any(atlases.roi{atlas,side}.nii.img(:)) % empty nucleus
+                    continue
+                end
+                clear centroid
+                for iter=1:200
                     try
                         centroid=mean(atlases.roi{atlas,side}.fv.vertices(:,1:3));
                         break
@@ -190,6 +199,7 @@ for nativemni=nm % switch between native and mni space atlases.
                         atlases.roi{atlas,side}.threshold=atlases.roi{atlas,side}.threshold./2;
                     end
                 end
+            
                 set(0,'CurrentFigure',resultfig);
 
                 atlases.roi{atlas,side}.Visible='on';
@@ -269,6 +279,34 @@ for nativemni=nm % switch between native and mni space atlases.
                 if rand(1)>0.8 % we don't want to show every buildup step due to speed but want to show some buildup.
                     drawnow
                 end
+            elseif strcmp(atlases.pixdim{atlas,side}, 'surface')
+                
+                [~, surfTag] = fileparts(atlases.names{atlas});
+                surfTag=ea_stripext(surfTag);
+                visible='on';
+                if isfield(atlases,'presets')
+                    if ~ismember(atlas,atlases.presets(atlases.defaultset).show)
+                        visible='off';
+                    end
+                end
+                atlassurfs{atlascnt,1}=patch('vertices',atlases.fv{atlas,side}.vertices,'faces',atlases.fv{atlas,side}.faces,...
+                    'FaceVertexCData',atlases.fv{atlas,side}.facevertexcdata,'FaceColor','interp','EdgeColor','none',...
+                    'SpecularStrength',0.35,'SpecularExponent',30,'SpecularColorReflectance',0,'AmbientStrength',0.07,'DiffuseStrength',0.45,'FaceLighting','gouraud');
+
+                colorbuttons(atlascnt)=uitoggletool(ht,'CData',ea_get_icn('atlas',atlases.heatcolormap(end,:)),...
+                    'TooltipString',[surfTag,'_',sidestr{side}],...
+                    'ClickedCallback',{@atlasvisible,resultfig,atlascnt},...
+                    'State',visible);
+
+                % set Tags
+                try
+                    set(colorbuttons(atlascnt),'Tag', [surfTag,'_',sidestr{side}])
+                    set(atlassurfs{atlascnt,1},'Tag',[surfTag,'_',sidestr{side}]);
+                catch
+                    keyboard
+                end
+                
+                atlascnt=atlascnt+1;
             elseif strcmp(atlases.pixdim{atlas,side}, 'fibers')
                 fv=atlases.fv{atlas,side};
 
@@ -444,7 +482,7 @@ for nativemni=nm % switch between native and mni space atlases.
                     drawnow
                 end
             elseif strcmp(atlases.pixdim{atlas,side}, 'discfibers')
-                tractPath = [ea_space([],'atlases'),options.atlasset,filesep,getsidec(side,sidestr)];
+                tractPath = [atlasFolder,options.atlasset,filesep,getsidec(side,sidestr)];
                 tractName = ea_stripext(atlases.names{atlas});
 
                 disctract = load([tractPath, filesep, atlases.names{atlas}]);
@@ -514,7 +552,7 @@ for nativemni=nm % switch between native and mni space atlases.
                     end
 
                     % Plot fibers
-                    h = streamtube(fibcell{fibside},0.2);
+                    h = streamtube(fibcell{fibside}, options.prefs.d3.fiberwidth);
 
                     for fib=1:length(h)
                         if vals{fibside}(fib)>0
@@ -633,18 +671,14 @@ for nativemni=nm % switch between native and mni space atlases.
         ea_methods(options, ['Atlas used for 3D visualization: ', atlases.citation.name], atlases.citation.long);
     end
 
-    if options.writeoutstats && ~strcmp(options.leadprod, 'group')
-        if exist('prioratlasnames','var')
-            if ~isequal(ea_stats.atlases.names,prioratlasnames)
-                warning('off', 'backtrace');
-                warning('%s: other atlasset used as before. Deleting VAT and Fiberinfo. Saving backup copy.', options.patientname);
-                warning('on', 'backtrace');
-                ds=load(statsFile);
-                save(statsFile,'ea_stats','-v7.3');
-                save(statsBackupFile,'-struct','ds','-v7.3');
-            else
-                save(statsFile,'ea_stats','-v7.3');
-            end
+    if options.writeoutstats
+        if exist('prioratlasnames','var') && ~isequal(ea_stats.atlases.names, prioratlasnames)
+            warning('off', 'backtrace');
+            warning('%s: other atlasset used as before. Deleting VAT and Fiberinfo. Saving backup copy.', options.patientname);
+            warning('on', 'backtrace');
+            ds = load(statsFile, 'ea_stats');
+            save(statsFile, 'ea_stats', '-v7.3');
+            save(statsBackupFile, '-struct', 'ds', '-v7.3');
         else
             save(statsFile,'ea_stats','-v7.3');
         end
@@ -739,6 +773,9 @@ switch type
         sides=1; % midline
         sidestr={'midline'};
     case 6 % probabilistic
+        sides=1:2;
+        sidestr={'right','left'};
+    case 10 % surface
         sides=1:2;
         sidestr={'right','left'};
 end

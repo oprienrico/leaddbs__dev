@@ -22,7 +22,7 @@ function varargout = lead_dbs(varargin)
 
 % Edit the above text to modify the response to help lead_dbs
 
-% Last Modified by GUIDE v2.5 25-Jan-2019 09:22:24
+% Last Modified by GUIDE v2.5 16-Sep-2022 19:45:41
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -102,7 +102,7 @@ ea_init_normpopup(handles, options.prefs.normalize.default);
 ea_processguiargs(handles,varargin)
 
 %% add tools menu
-ea_menu_initmenu(handles,{'import','acpc','export','applynorm','dbs','cluster','prefs','vatcon','transfer','checkregfigs','space','surfice','methods'},options.prefs);
+ea_menu_initmenu(handles,{'import','acpc','export','applynorm','leador','dbs','cluster','prefs','vatcon','transfer','checkregfigs','space','surfice','methods'},options.prefs);
 
 ea_firstrun(handles,options);
 ea_getui(handles);
@@ -585,11 +585,7 @@ else
     set(handles.targetpopup,'Enable','off');
 end
 
-
-
-
 ea_storeui(handles);
-
 
 
 % --- Executes on selection change in MRCT.
@@ -601,18 +597,8 @@ function MRCT_Callback(hObject, eventdata, handles)
 % Hints: contents = cellstr(get(hObject,'String')) returns MRCT contents as cell array
 %        contents{get(hObject,'Value')} returns selected item from MRCT
 
-ea_switchctmr(handles,get(hObject,'Value'));
-if get(hObject,'Value')==1
-    set(handles.reconmethod,'enable','on');
-    set(handles.reconmethod,'Value',1); % set to TRAC/CORE algorithm.
-    set(handles.targetpopup,'enable','on');
-    set(handles.maskwindow_txt,'enable','on');
-else
-    set(handles.reconmethod,'enable','on');
-    set(handles.reconmethod,'Value',2); % set to PaCER algorithm.
-    set(handles.targetpopup,'enable','off');
-    set(handles.maskwindow_txt,'enable','off');
-end
+ea_switchctmr(handles, get(hObject,'Value'));
+
 ea_storeui(handles);
 
 
@@ -1015,6 +1001,9 @@ function vizspacepopup_Callback(hObject, eventdata, handles)
 %    %set(handles.writeout2d_checkbox,'Value',1);
 % end
 atlasset=get(handles.atlassetpopup,'String');
+if get(handles.atlassetpopup,'Value')>length(atlasset)
+    set(handles.atlassetpopup,'Value',length(atlasset));
+end
 atlasset=atlasset{get(handles.atlassetpopup,'Value')};
 options.prefs=ea_prefs('');
 ea_listatlassets(options,handles,get(handles.vizspacepopup,'Value'),atlasset);
@@ -1852,6 +1841,11 @@ function surfacemethod_Callback(hObject, eventdata, handles)
 
 % Hints: contents = cellstr(get(hObject,'String')) returns surfacemethod contents as cell array
 %        contents{get(hObject,'Value')} returns selected item from surfacemethod
+if strcmpi(hObject.String{hObject.Value}, 'FreeSurfer')
+    handles.surfsettings.Visible = 'on';
+else
+    handles.surfsettings.Visible = 'off';
+end
 
 
 % --- Executes during object creation, after setting all properties.
@@ -1866,6 +1860,13 @@ if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgr
     set(hObject,'BackgroundColor','white');
 end
 
+% --- Executes on button press in checkcoreg.
+function checkreg_Callback(hObject, eventdata, handles)
+% hObject    handle to checkcoreg (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hint: get(hObject,'Value') returns toggle state of checkcoreg
 
 % --- Executes on button press in refinefit.
 function refinefit_Callback(hObject, eventdata, handles)
@@ -1874,3 +1875,11 @@ function refinefit_Callback(hObject, eventdata, handles)
 % handles    structure with handles and user data (see GUIDATA)
 
 % Hint: get(hObject,'Value') returns toggle state of refinefit
+
+
+% --- Executes on button press in surfsettings.
+function surfsettings_Callback(hObject, eventdata, handles)
+% hObject    handle to surfsettings (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+ea_freesurfersetting;

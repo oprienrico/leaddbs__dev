@@ -10,6 +10,17 @@ if isempty(analysisFile) % Create new analysis file in case not found
     analysisFile = ea_genGroupAnalysisFile(groupdir);
 end
 load(analysisFile, 'M');
+
+datasetFolder = regexp(groupdir, ['(.*)(?=\', filesep, 'derivatives\', filesep, 'leadgroup)'], 'match', 'once');
+if isfile(fullfile(datasetFolder, 'miniset.json'))
+    for i = 1:size(M.patient.list,1)
+        [~, patient_tag] = fileparts(M.patient.list{i});
+        M.patient.list{i} = fullfile(datasetFolder, 'derivatives', 'leaddbs', patient_tag);
+    end
+    M.root = fullfile(groupdir, filesep);
+    save(analysisFile, 'M')
+end
+
 if ~isfield(M.ui, 'mirrorsides')
     % Fix missing 'mirrorsides' field for old analysis
     try

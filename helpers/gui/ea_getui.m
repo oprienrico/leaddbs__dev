@@ -5,7 +5,8 @@ subjId = getappdata(handles.leadfigure,'subjId');
 
 % Determine prefs path
 if strcmp(handles.patdir_choosebox.String, 'Choose Patient Directory') || length(subjId) > 1
-	prefsPath = fullfile(ea_getearoot, 'ea_ui.mat');
+	% prefsPath = fullfile(ea_getearoot, 'ea_ui.mat');
+    prefsPath = '';
 else
 	prefsPath = bids.getPrefs(subjId{1}, 'uiprefs', 'mat');
 end
@@ -13,7 +14,9 @@ end
 if isfile(prefsPath)
     % Load UI prefs
     options = load(prefsPath);
-
-    % Update UI
-    ea_options2handles(options, handles);
+else
+    options = struct;
 end
+
+% Update UI
+ea_options2handles(options, handles);

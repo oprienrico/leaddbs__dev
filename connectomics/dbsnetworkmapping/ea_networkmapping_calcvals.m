@@ -24,8 +24,8 @@ options.lcm.cmd = 1;
 ea_run('run', options);
 
 %% Load in nifti files as matrix
+connLabel = ea_getConnLabel(cfile);
 for s=1:size(vatlist,1)
-        connLabel = ea_getConnLabel(cfile);
         switch sf(ix)
             case 1 % structural
                 fingerprint = setBIDSEntity(vatlist{s}, 'conn', connLabel, 'suffix', 'strucmap');
@@ -64,7 +64,6 @@ options.autoimprove = 0;
 options.axiscontrast = 8;
 options.zresolution = 10;
 options.atl.genpt = 0;
-options.atl.normalize = 0;
 options.atl.can = 1;
 options.atl.pt = 0;
 options.atl.ptnative = 0;
@@ -95,7 +94,7 @@ options.d3.mirrorsides = 0;
 options.d3.autoserver = 0;
 options.d3.expdf = 0;
 options.numcontacts = 4;
-options.writeoutpm = 1;
+options.writeoutpm = 0;
 options.elmodel = 'Medtronic 3389';
 options.expstatvat.do = 0;
 options.fiberthresh = 10;

@@ -26,6 +26,7 @@ menuItems = {'Redownload data files'
              'Structural Group Connectome 32 MGH-USC HCP subjects GQI (Horn 2017)'
              'Structural Group Connectome 85 PPMI PD-patients GQI (Ewert 2017)'
              'Functional Group Connectome 74 PPMI PD-patients 15 controls (Horn 2017)'
+             'Functional Group Connectome 75 Toronto PD-patients (Loh & Boutet 2020)'
              'Allan Institute Genetics Database'};
 
 downloadIDs = {'leaddata'
@@ -41,6 +42,7 @@ downloadIDs = {'leaddata'
                'group2017'
                'group2017_ppmi'
                'fgroup2017_ppmi'
+               'TorPD'
                'allengenetics'};
 
 assetNames = menuItems(5:end);
@@ -275,6 +277,25 @@ switch cmd
         else
             disp([assetName, ' is installed.'])
         end
+    case 'TorPD'
+        checkf=[ea_getconnectomebase('fmri',prefs),'Tor PD (Loh & Boutet 2020)',filesep,'dataset_info.json'];
+        force=ea_alreadyinstalled(checkf,checkonly,robot);
+        if checkonly
+            success=~force;
+            return;
+        end
+        if force==-1
+            success=-1;
+            return;
+        end
+
+        if ~exist(checkf,'file') || force
+            success=ea_downloadasset(assetName,...
+                [ea_getconnectomebase('fmri',prefs),'TorPD_Loh_Boutet_2020.zip'],...
+                cmd);
+        else
+            disp([assetName, ' is installed.'])
+        end
     case 'allengenetics'
         checkf = [ea_space, 'genetics', filesep, 'geneinfo.mat'];
         force=ea_alreadyinstalled(checkf,checkonly,robot);
@@ -294,19 +315,15 @@ switch cmd
         else
             disp([assetName, ' is installed.'])
         end
-    otherwise
-        success=0;
-        
-        if any(strcmp(cmd,python_envs))
-            py_env = ea_conda_env(cmd);
-            if ~checkonly
-                if ~ea_conda.is_installed
-                    ea_conda.install;
-                end
-                py_env.force_create;
+    case python_envs
+        py_env = ea_conda_env(cmd);
+        if ~checkonly
+            if ~ea_conda.is_installed
+                ea_conda.install;
             end
-            success = py_env.is_created;
+            py_env.force_create;
         end
+        success = py_env.is_created;
 end
 
 

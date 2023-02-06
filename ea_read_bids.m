@@ -19,7 +19,7 @@ end
 [bids_folder,id]=fileparts(bids_subject_folder);
 
 % at this point lead checks that the subject folder begins with 'sub', not sure this is necessary:
-if ~strcmp(id(1:3),'sub')
+if ~startsWith(id,'sub')
     error('Not a valid BIDS subject folder')
 end
 
@@ -154,7 +154,6 @@ options.autoimprove = 0;
 options.axiscontrast = 8;
 options.zresolution = 10;
 options.atl.genpt = false;
-options.atl.normalize = 0;
 options.atl.can = true;
 options.atl.pt = 0;
 options.atl.ptnative = false;
@@ -189,7 +188,7 @@ options.d3.writeatlases = 1;
 options.numcontacts = 4;
 options.entrypoint = 'STN, GPi or ViM';
 options.entrypointn = 1;
-options.writeoutpm = 1;
+options.writeoutpm = 0;
 options.elmodeln = 1;
 options.elmodel = 'Medtronic 3389';
 options.atlasset = 'DISTAL Minimal (Ewert 2017)';

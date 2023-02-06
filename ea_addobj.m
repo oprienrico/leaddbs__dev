@@ -7,17 +7,32 @@ if isempty(addht)
 end
 
 if iscell(obj) % dragndrop for tract and roi, 'obj' is a cell of the files
-    if all(cellfun(@numel, regexp(obj, '(\.mat|\.trk)$', 'match', 'once')))
+    if all(cellfun(@numel, regexp(obj, '(\.mat|\.trk)$', 'match', 'once'))) %tract
         for i=1:length(obj)
             addfibertract(obj{i}, resultfig, addht, [], 0, options);
         end
-    elseif all(cellfun(@numel, regexp(obj, '(\.nii|\.nii\.gz)$', 'match', 'once')))
+    
+    elseif all(cellfun(@numel, regexp(obj, '(\.nii|\.nii\.gz)$', 'match', 'once'))) %roi
         pobj.plotFigureH = resultfig;
         pobj.htH = addht;
-        for i=1:length(obj)
-            pobj.color = ea_uisetcolor;
-            ea_roi(obj{i}, pobj);
-        end
+        prefs = ea_prefs;
+         if prefs.d3.roi.autofillcolor && length(obj)>1 % i.e. multiple roi's selected
+            if length(obj)<=32
+                str2eval = ['cmap = ', prefs.d3.roi.defaultcolormap, '(32);'];
+            else
+                str2eval = ['cmap = ', prefs.d3.roi.defaultcolormap, '(', num2str(length(obj)), ');'];
+            end
+            eval(str2eval);
+            for i=1:length(obj)
+                pobj.color = cmap(i,:);
+                ea_roi(obj{i}, pobj);
+            end
+         else
+             for i=1:length(obj)
+                 pobj.color = ea_uisetcolor;
+                 ea_roi(obj{i}, pobj);
+             end
+         end
     elseif all(cellfun(@numel, regexp(obj, '(\.fibfilt)$', 'match', 'once')))
         for i=1:length(obj)
             ea_discfiberexplorer(obj{i}, resultfig);
@@ -34,10 +49,16 @@ if iscell(obj) % dragndrop for tract and roi, 'obj' is a cell of the files
         warndlg('Unsupported file(s) found!');
     end
 else  % uigetfile, 'obj' is the type of the files to be selected
+    if ~isfield(options, 'root')
+        startPath = ea_gethome;
+    else
+        startPath = [options.root,options.patientname,filesep];
+    end
+
     switch obj
         case 'tract'
             % open dialog
-            [tractName,tractPath]=uigetfile({'*.mat;*.trk', 'Fiber Files (*.mat,*.trk)'},'Choose Fibertract to add to scene...',[options.root,options.patientname,filesep],'MultiSelect','on');
+            [tractName,tractPath]=uigetfile({'*.mat;*.trk', 'Fiber Files (*.mat,*.trk)'},'Choose Fibertract to add to scene...',startPath,'MultiSelect','on');
             if isnumeric(tractName) % User pressed cancel, tractName is 0
                 return
             else
@@ -51,7 +72,8 @@ else  % uigetfile, 'obj' is the type of the files to be selected
             end
         case 'roi' % atlas
             % open dialog
-            [roiName, roiPath] = uigetfile({'*.nii';'*.nii.gz'},'Choose .nii image to add to scene...',[options.root,options.patientname,filesep],'MultiSelect','on');
+            [roiName, roiPath] = uigetfile({'*.nii';'*.nii.gz'},'Choose .nii image to add to scene...',startPath,'MultiSelect','on');
+
             if isnumeric(roiName) % User pressed cancel, roiName is 0
                 return
             else
@@ -61,17 +83,31 @@ else  % uigetfile, 'obj' is the type of the files to be selected
 
                 pobj.plotFigureH = resultfig;
                 pobj.htH = addht;
-                for fi=1:length(roiName)
-                    pobj.color = ea_uisetcolor;
-                    ea_roi([roiPath, roiName{fi}], pobj);
+                prefs = ea_prefs;
+                if prefs.d3.roi.autofillcolor && length(roiName)>1 % i.e. multiple roi's selected
+                    if length(obj)<=32
+                        str2eval = ['cmap = ', prefs.d3.roi.defaultcolormap, '(32);'];
+                    else
+                        str2eval = ['cmap = ', prefs.d3.roi.defaultcolormap, '(', num2str(length(roiName)), ');'];
+                    end
+                    eval(str2eval);
+                    for fi=1:length(roiName)
+                        pobj.color = cmap(fi,:);
+                        ea_roi([roiPath, roiName{fi}], pobj);
+                    end
+                else
+                    for fi=1:length(roiName)
+                        pobj.color = ea_uisetcolor;
+                        ea_roi([roiPath, roiName{fi}], pobj);
+                    end
                 end
             end
         case 'tractmap'
-            [tfina,tpana]=uigetfile('*.mat','Choose Fibertract to add to scene...',[options.root,options.patientname,filesep],'MultiSelect','off');
-            [rfina,rpana]=uigetfile({'*.nii';'*.nii.gz'},'Choose .nii image to colorcode tracts...',[options.root,options.patientname,filesep],'MultiSelect','off');
+            [tfina,tpana]=uigetfile('*.mat','Choose Fibertract to add to scene...',startPath,'MultiSelect','off');
+            [rfina,rpana]=uigetfile({'*.nii';'*.nii.gz'},'Choose .nii image to colorcode tracts...',startPath,'MultiSelect','off');
             addtractweighted([tpana,tfina],[rpana,rfina],resultfig,addht,options)
         case 'fiberactivation'
-            [fileName,filePath]=uigetfile('*.mat','Choose fiber activation to add to scene...',[options.root,options.patientname,filesep],'MultiSelect','off');
+            [fileName,filePath]=uigetfile('*.mat','Choose fiber activation to add to scene...',startPath,'MultiSelect','off');
             ea_fiberactivation_viz([filePath,fileName],resultfig)
     end
 end
@@ -181,7 +217,7 @@ if ischar(obj) % addobj
             end
 
             % Check fiber format
-            if size(fibers,2) == 5 && contains(obj,'fiberactivation') % fiber activation result loaded
+            if size(fibers,2) == 5 && exist('connectome_name', 'var') % fiber activation result loaded
                 ea_fiberactivation_viz(obj, resultfig);
                 return;
             elseif size(fibers,2) == 4 % with index

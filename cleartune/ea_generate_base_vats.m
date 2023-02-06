@@ -10,6 +10,7 @@ va=varargin{5};
 options = ea_setopts_local;
 options.native = 0;
 options.groupmode = 1;
+options.groupid = 'cleartune';
 
 switch va
     case 'mA'
@@ -108,7 +109,7 @@ options.verbose=3;
 options.sides=1:2; % re-check this later..
 options.fiberthresh=1;
 options.writeoutstats=1;
-options.writeoutpm=1;
+options.writeoutpm = 0;
 options.colormap=jet;
 options.d3.write=1;
 options.d3.prolong_electrode=2;

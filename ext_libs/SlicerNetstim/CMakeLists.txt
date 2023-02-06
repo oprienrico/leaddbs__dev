@@ -20,11 +20,11 @@ include(${Slicer_USE_FILE})
 #-----------------------------------------------------------------------------
 # Extension modules
 add_subdirectory(LeadOR)
-#add_subdirectory(AlphaOmega) # don't add for slicer
 add_subdirectory(StereotacticPlan)
 add_subdirectory(ImportAtlas)
 add_subdirectory(WarpDrive)
 add_subdirectory(NetstimPreferences)
+add_subdirectory(FiducialRegistrationVariableRBF)
 ## NEXT_MODULE
 
 #-----------------------------------------------------------------------------

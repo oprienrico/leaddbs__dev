@@ -86,7 +86,7 @@ filePrefix = ['sub-', options.subj.subjId, '_desc-'];
 hmchanged=ea_headmodel_changed(options,side,elstruct); % can only use this test once.
 assignin('caller','hmchanged',hmchanged);
 if hmchanged
-    ea_dispt('Headmodel needs to be re-calculated. This may take a while...');
+    disp('Headmodel needs to be re-calculated. This may take a while...');
 
     cnt=1;
     mesh.tet=[];
@@ -2252,7 +2252,7 @@ elseif strcmp(current, 'sparse') && strcmp(desired, 'sparsewithpow')
     autoindx = indx(indx(:,1)==indx(:,2), 1);
     cmbindx  = setdiff([1:size(indx,1)]', autoindx);
 
-    if strcmp(data.dimord(1:3), 'rpt')
+    if startsWith(data.dimord, 'rpt')
         data.powspctrm = data.crsspctrm(:, autoindx, :, :);
         data.crsspctrm = data.crsspctrm(:, cmbindx,  :, :);
     else

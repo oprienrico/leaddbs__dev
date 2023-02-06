@@ -25,10 +25,8 @@ else
     pythonPath = options.prefs.env.pythonPath;
     if isunix
         setenv('PATH', [pythonPath, ':', binPath]);
-        pythonBinName = 'python3';
     else
         setenv('PATH', [pythonPath, ';', binPath]);
-        pythonBinName = 'python';
     end
 end
 
@@ -82,9 +80,9 @@ else
     c3File = [ea_space, 'c3mask.nii'];
     if ~isfile(c1File) || ~isfile(c2File) || ~isfile(c3File)
         ea_newseg(fullfile(ea_space, [options.primarytemplate, '.nii']), 0, 1);
-        movefile([ea_space, 'c1', options.primarytemplate, 'nii'], c1File);
-        movefile([ea_space, 'c2', options.primarytemplate, 'nii'], c2File);
-        movefile([ea_space, 'c3', options.primarytemplate, 'nii'], c3File);
+        movefile([ea_space, 'c1', options.primarytemplate, '.nii'], c1File);
+        movefile([ea_space, 'c2', options.primarytemplate, '.nii'], c2File);
+        movefile([ea_space, 'c3', options.primarytemplate, '.nii'], c3File);
     end
 
     segMaskPath = [ea_space, segmaskName];
@@ -314,6 +312,8 @@ if settings.calcAxonActivation
     settings.axonLength = options.prefs.machine.vatsettings.butenko_axonLength;
     settings.fiberDiameter = options.prefs.machine.vatsettings.butenko_fiberDiameter;
 
+    %settings.AxonModel = options.prefs.machine.vatsettings.butenko_AxonModel;
+
     preopAnchor = options.subj.preopAnat.(options.subj.AnchorModality).coreg;
     if ~startsWith(settings.connectome, 'Multi-Tract: ') % Normal connectome
         fprintf('Loading connectome: %s ...\n', settings.connectome);
@@ -403,6 +403,11 @@ if settings.calcAxonActivation
                     fibers(:,[1,2,3,5]) = fiberFiltered{i}.fibers;
                     fibers(:,4) = repelem(1:length(fiberFiltered{i}.idx), fiberFiltered{i}.idx)';
                     fiberFiltered{i}.fibers = fibers;
+
+                    % store the original number of fibers
+                    % to compute percent activation
+                    fiberFiltered{i}.origNum = size(conn.idx,1);
+
                     fibersFound(t,i) = 1;
                 end
             end
@@ -516,14 +521,14 @@ for side=0:1
                     '--volume ', ea_getearoot, 'ext_libs/OSS-DBS:/opt/OSS-DBS ', ...
                     '--volume ', outputDir, ':/opt/Patient ', ...
                     '--rm ', dockerImage, ' ', ...
-                    'python3 /opt/OSS-DBS/OSS_platform/Axon_allocation.py /opt/Patient ', num2str(side)]);
+                    'python3 /opt/OSS-DBS/OSS_platform/Axon_allocation.py /opt/Patient ', num2str(side), ' McIntyre2002_ds']);
         else % Singularity
-            system(['python3 ', ea_getearoot, 'ext_libs/OSS-DBS/OSS_platform/Axon_allocation.py ', outputDir, ' ', num2str(side)]);
+            system(['python3 ', ea_getearoot, 'ext_libs/OSS-DBS/OSS_platform/Axon_allocation.py ', outputDir, ' ', num2str(side), ' McIntyre2002_ds']);
         end
     end
 
     % Call OSS-DBS GUI to start calculation
-    system([pythonBinName, ' ', ea_getearoot, 'ext_libs/OSS-DBS/OSS_platform/OSS-DBS_LeadDBS_integrator.py ', ...
+    system(['python', ' ', ea_getearoot, 'ext_libs/OSS-DBS/OSS_platform/OSS-DBS_LeadDBS_integrator.py ', ...
             parameterFile, ' ', num2str(side)]);	% 0 is right side, 1 is the left side here
 
     % Check if OSS-DBS calculation is finished
@@ -658,6 +663,12 @@ for side=0:1
 
                 if options.native % Generate fiber activation file in MNI space
                     fprintf('Restore connectome in MNI space: %s ...\n\n', settings.connectome);
+                    
+                    if startsWith(settings.connectome, 'Multi-Tract: ')
+                        % load the particular pathway in MNI
+                        [atlas_folder,~] = fileparts(tract);
+                        originalFib = load([atlas_folder,filesep,tractName]);
+                    end
                     conn.fibers = originalFib;
 
                     fprintf('Convert fiber activation result into MNI space...\n\n');
@@ -693,6 +704,13 @@ for side=0:1
                             fiberActivationMNI = [templateOutputBasePath, 'fiberActivation_model-ossdbs_hemi-', sideLabel, '.mat'];
                         end
                     end
+
+                    if startsWith(settings.connectome, 'Multi-Tract: ')
+                        conn.connectome_name = connName;
+                    else
+                        conn.connectome_name = settings.connectome;
+                    end
+
                     save(fiberActivationMNI, '-struct', 'conn');
 
                     if ~options.orignative % Visualize MNI space result

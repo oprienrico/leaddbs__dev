@@ -47,11 +47,11 @@ if options.prefs.machine.normsettings.schoenecker_movim==1 % Based on pre-op ima
     disp(['Pre-op ', strjoin(fieldnames(options.subj.coreg.anat.preop), ', '), ' images included for normalization']);
     imagePresent = flip(struct2cell(options.subj.coreg.anat.preop)); % Flip the order so anchor will be the last one
 elseif options.prefs.machine.normsettings.schoenecker_movim==2 % Based on post-op images
-    switch options.modality
-        case 1 % MRI
+    switch options.subj.postopModality
+        case 'MRI'
             disp('Post-op MRI included for normalization');
             imagePresent = options.subj.coreg.anat.postop.ax_MRI;
-        case 2 % CT
+        case 'CT'
             disp('Post-op CT included for normalization');
             imagePresent = options.subj.coreg.anat.postop.CT;
     end
@@ -80,6 +80,7 @@ ea_ants_schoenecker(template, moving, options.subj.norm.anat.preop.(options.subj
 
 % Move transformation file
 [directory, fileName] = fileparts(options.subj.norm.anat.preop.(options.subj.AnchorModality));
+ea_mkdir(fileparts(options.subj.norm.transform.forwardBaseName));
 movefile([directory, filesep, fileName, '0GenericAffine.mat'], [options.subj.norm.transform.forwardBaseName, 'ants.mat']);
 movefile([directory, filesep, fileName, 'Inverse0GenericAffine.mat'], [options.subj.norm.transform.inverseBaseName, 'ants.mat']);
 
@@ -102,7 +103,8 @@ switch options.prefs.machine.normsettings.schoenecker_movim
         methodVerbose = '';
 end
 
-ea_methods(options,['Pre- (and post-) operative acquisitions were spatially normalized into ',ea_getspace,' space ',scit,' based on preoperative acquisition(s) (',ea_cell2strlist(imagePresent),') using a',...
+modality = regexp(imagePresent, '(?<=_)[^\W_]+(?=\.nii(\.gz)?$)', 'match', 'once');
+ea_methods(options,['Pre- (and post-) operative acquisitions were spatially normalized into ',ea_getspace,' space ',scit,' based on preoperative acquisition(s) (',strjoin(modality, ', '),') using a',...
     ' three-step linear affine registration as implemented in Advanced Normalization Tools (Avants 2008; http://stnava.github.io/ANTs/). This linear registration protocol follows the approach described in Schonecker et al. 2009.',...
     ' After a brief rigid-body transform, linear deformation into template space was achieved in three stages: 1. Whole brain affine registration 2. Affine registration that solved the cost-function inside a subcortical mask only and',...
     ' 3. Affine registration that focused on a region defined by a small basal ganglia mask. In the original publication, this approach was validated for use in DBS and yielded a',...

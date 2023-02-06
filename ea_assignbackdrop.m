@@ -35,7 +35,7 @@ if strcmp(bdstring, 'list')
 
     % check if preop and postop images exist
     if ~nopatientmode
-        if ~isfile(options.subj.coreg.anat.preop.(options.subj.AnchorModality))
+        if ~isfield(options.subj, 'coreg') || ~isfile(options.subj.coreg.anat.preop.(options.subj.AnchorModality))
             haspreop=0;
         end
         try
@@ -85,7 +85,7 @@ if strcmp(bdstring, 'list')
 
 elseif regexp(bdstring, ['^', subpat,' Pre-OP \(.*\)$'])    % pattern: "Patient Pre-OP (*)"
     whichpreop = (regexp(bdstring, ['(?<=^', subpat,' Pre-OP \()(.*)(?=\))'],'match','once'));
-    options = ea_switchpost2pre(options, native, whichpreop);
+    options = ea_switchpost2pre(options, native, whichpreop); % dangerous, likely best to replace sooner or later - took me a while to read
     [Vtra,Vcor,Vsag] = assignpatspecific(options, native);
     varargout{1} = Vtra;
     varargout{2} = Vcor;
@@ -93,9 +93,17 @@ elseif regexp(bdstring, ['^', subpat,' Pre-OP \(.*\)$'])    % pattern: "Patient 
 
 elseif strcmp(bdstring, [subpat, ' Post-OP'])
     [Vtra,Vcor,Vsag] = assignpatspecific(options, native);
+    if exist(options.subj.brainshift.transform.scrf,'file') % apply brainshift correction to files on the fly.
+        scrf=load(options.subj.brainshift.transform.scrf);
+        Vtra.mat=scrf.mat*Vtra.mat;
+        Vcor.mat=scrf.mat*Vcor.mat;
+        Vsag.mat=scrf.mat*Vsag.mat;
+    end
+
     varargout{1} = Vtra;
     varargout{2} = Vcor;
     varargout{3} = Vsag;
+    
 
 elseif strcmp(bdstring, 'BigBrain 100 um ICBM 152 2009b Sym (Amunts 2013)')
 %     if ~ea_checkinstall('bigbrain',0,1)
@@ -130,8 +138,8 @@ end
 
 function [Vtra,Vcor,Vsag] = assignpatspecific(options, native)
 if native
-    switch options.modality
-        case 1 % MR
+    switch options.subj.postopModality
+        case 'MRI'
             Vtra = spm_vol(options.subj.coreg.anat.postop.ax_MRI);
             if isfield(options.subj.coreg.anat.postop, 'cor_MRI') && isfile(options.subj.coreg.anat.postop.cor_MRI)
                 Vcor = spm_vol(options.subj.coreg.anat.postop.cor_MRI);
@@ -143,14 +151,14 @@ if native
             else
                 Vsag = Vtra;
             end
-        case 2 % CT
+        case 'CT'
             Vtra = spm_vol(options.subj.coreg.anat.postop.tonemapCT);
             Vcor = Vtra;
             Vsag = Vtra;
     end
 else
-    switch options.modality
-        case 1 % MR
+    switch options.subj.postopModality
+        case 'MRI'
             Vtra = spm_vol(options.subj.norm.anat.postop.ax_MRI);
             if isfield(options.subj.norm.anat.postop, 'cor_MRI') && isfile(options.subj.norm.anat.postop.cor_MRI)
                 Vcor = spm_vol(options.subj.norm.anat.postop.cor_MRI);
@@ -162,7 +170,7 @@ else
             else
                 Vsag = Vtra;
             end
-        case 2 % CT
+        case 'CT'
             Vtra = spm_vol(options.subj.norm.anat.postop.tonemapCT);
             Vcor = Vtra;
             Vsag = Vtra;
@@ -198,8 +206,7 @@ if native
     options.subj.coreg.anat.postop.tonemapCT = options.subj.coreg.anat.preop.(whichpreop);
 else
     normImage = options.subj.preopAnat.(options.subj.AnchorModality).norm;
-    normImage = strrep(normImage, ['_', options.subj.AnchorModality, '.'], ['_', whichpreop, '.']);
-
+    normImage = strrep(normImage,options.subj.AnchorModality,whichpreop);
     if ~isfile(normImage)
         to{1} = normImage;
         from{1} = options.subj.preopAnat.(whichpreop).coreg;

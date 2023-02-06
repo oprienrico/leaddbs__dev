@@ -144,8 +144,12 @@ for group=groups
                         vals{group,side} = ea_nanmean(thisvals)';
                         vals{group,side}(vals{group,side} < obj.statimpthreshold) = NaN;
                     case 'N-Image'
-                        tmpind = find(I(gpatsel,side) > obj.statimpthreshold);
-                        Nmap=ea_nansum(double(gval{side}(tmpind,:)));
+                        if ~ea_isbinary(I(gpatsel,side))
+                            tmpind = find(I(gpatsel,side) > obj.statimpthreshold);
+                        else
+                            tmpind = 1:length(gpatsel);
+                        end
+                        Nmap=ea_nansum(double(gval{side}(gpatsel(tmpind),:)));
                         vals{group,side} = Nmap';
                         vals{group,side}(vals{group,side} < round(numel(tmpind)*(obj.statNthreshold/100))) = NaN;
                     case 'T-Test'
@@ -164,6 +168,7 @@ for group=groups
                         else
                             [~,ps,~,stats]=ttest(thisvals(:,~nanidx),H0);
                         end
+                        stats.tstat(isinf(stats.tstat))=nan;
 
                         if obj.showsignificantonly
                             stats.tstat=ea_corrsignan(stats.tstat',ps',obj);
@@ -209,6 +214,54 @@ for group=groups
                         vals{group,side}=nan(size(thisvals,2),1);
 %                         vals{group,side}(~nanidx)=meanvals;
                         vals{group,side}(~nanidx)=logpvals;
+                    case 'Proportion Test (Binary Var)'
+                        
+                        gval{side} = double(gval{side});
+                        %gval{side}(gval{side} == 0) = NaN; % set VTAs to NaN/1 instead of 0/1
+
+                        thisinvals=((gval{side}(gpatsel,:)==1).*repmat((I(gpatsel,side)==1),1,size(gval{side}(gpatsel,:),2)));
+                        thisoutvals=((gval{side}(gpatsel,:)==0).*repmat((I(gpatsel,side)==0),1,size(gval{side}(gpatsel,:),2)));
+
+                        Nmap=nansum(gval{side}(gpatsel,:));
+                        nanidx=Nmap<round(size(thisinvals,1)*(obj.coverthreshold/100));
+                        thisinvals(:,nanidx)=nan;
+
+                        non_nan=~nanidx;
+                        prop=nan(size(gval{side},2),1); %
+                        outps=prop; %
+                        for vox=find(non_nan)                 
+                            [h,outps(vox), prop(vox)]  = ea_prop_test([ea_nansum(thisinvals(:,vox)),ea_nansum(thisoutvals(:,vox))],[sum(gval{side}(gpatsel,vox)==1),sum(gval{side}(gpatsel,vox)==0)],1);
+                        end
+
+                        if obj.showsignificantonly
+                            prop=ea_corrsignan(prop',outps',obj);
+                        end
+                        vals{group,side}=prop';
+                    case 'Binomial Test (Binary Var)'
+                        
+                        gval{side} = double(gval{side});
+                        %gval{side}(gval{side} == 0) = NaN; % set VTAs to NaN/1 instead of 0/1
+
+                        coverage_createeffect=((gval{side}(gpatsel,:)==1).*repmat((I(gpatsel,side)==1),1,size(gval{side}(gpatsel,:),2)));
+                        coverage=((gval{side}(gpatsel,:)==1));
+
+                        Nmap=ea_nansum(gval{side}(gpatsel,:));
+                        nanidx=Nmap<round(size(coverage_createeffect,1)*(obj.coverthreshold/100));
+                        coverage_createeffect(:,nanidx)=nan;
+
+                        non_nan=~nanidx;
+
+                        ps=nan(size(gval{side},2),1); %
+                        thisvals = nan(size(gval{side},2),1);
+                        for vox=find(non_nan)
+                            ps(vox) = binopdf(ea_nansum(coverage_createeffect(:,vox)),ea_nansum(coverage(:,vox)),ea_nansum(I(gpatsel,side)==1)/length(gpatsel));
+                            thisvals(vox) = (ea_nansum(coverage_createeffect(:,vox))./ea_nansum(coverage(:,vox))) - (ea_nansum(I(gpatsel,side)==1)/length(gpatsel));
+                        end
+                        if obj.showsignificantonly
+                            thisvals=ea_corrsignan(thisvals',ps',obj);
+                        end
+                        vals{group,side}=thisvals';
+
                 end
 
             case 'E-Fields'

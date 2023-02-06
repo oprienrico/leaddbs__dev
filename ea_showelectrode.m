@@ -68,6 +68,11 @@ for side=options.sides
         err=1;
         for tries=1:2
             [X,electrode,err]=ea_mapelmodel2reco(options,elspec,elstruct,side,resultfig);
+            if isfield(options,'nowrite')
+                if options.nowrite % means elstruct was manually manipulated after it had been plotted, we dont want to save that to disk.
+                    err = 0;
+                end
+            end
             if ~err
                 break
             elseif ~options.d3.mirrorsides
@@ -186,8 +191,8 @@ for side=options.sides
                       'Boston Scientific Vercise Directed'
                       'Boston Scientific Vercise Cartesia HX'
                       'Boston Scientific Vercise Cartesia X'
-                      'St. Jude Directed 6172 (short)'
-                      'St. Jude Directed 6173 (long)'}
+                      'Abbott Directed 6172 (short)'
+                      'Abbott Directed 6173 (long)'}
                     % Marker position relative to head position along z axis
                     markerposRel = options.elspec.markerpos-electrode.head_position(3);
                     dothearrows = 1;

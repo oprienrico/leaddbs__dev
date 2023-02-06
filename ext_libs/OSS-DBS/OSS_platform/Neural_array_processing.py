@@ -233,7 +233,24 @@ class Neuron_array(object):
             n_comp = int(((nr["ranvier_nodes"] - 1) + nr["inter_nodes"] + nr["para1_nodes"] + nr["para2_nodes"]) / (
                     nr["ranvier_nodes"] - 1))
             n_segm = int((N_Ranvier - 1) * n_comp + 1)  # overall number of compartments on one axon incl. internodal
+        elif self.neuron_model == 'McIntyre2002_ds':
 
+            # load the morphology
+            param_ax = {
+                'centered': True,
+                'diameter': fib_diam  # float, not a list here! Will throw an error if uneligible fiber diameter
+            }
+            a = Axon(param_ax)
+            nr = Axon.get_axonparams(
+                a)  # we need here distances between compartments: nr["ranvier_length"], nr["para1_length"], nr["para2_length"], nr["inter_length"], nr["deltax"]
+
+            if fib_diam >= 5.7:
+                n_comp = 3   # node -- -- internodal -- -- -- -- internodal -- -- node
+            else:
+                n_comp = 2   # mode -- -- -- internodal -- -- -- node
+
+            n_segm = int(
+                (N_Ranvier - 1) * n_comp + 1)  # overall number of compartments on one axon incl. internodal
         elif self.neuron_model == 'Reilly2016':
             n_comp = 2
             n_segm = int((
@@ -274,7 +291,7 @@ class Neuron_array(object):
 
             for inx in range(1, self.pattern['num_segments']):
                 if self.pattern[
-                    'fiber_diameter'] > 3.0:  # if larger than 3.0, 6 central compartments are required, otherwise 3
+                    'fiber_diameter'] >= 5.7:  # if larger than 3.0, 6 central compartments are required, otherwise 3
                     if loc_inx == 0:
                         l_step = (nr["para1_length"] + nr["ranvier_length"]) / 2000  # switch to mm from Âµm
                     if loc_inx == 1 or loc_inx == 11:
@@ -303,6 +320,30 @@ class Neuron_array(object):
 
                 if inx % n_comp == 0:
                     loc_inx = 0
+
+        elif self.neuron_model == 'McIntyre2002_ds':
+            for inx in range(1, self.pattern['num_segments']):
+
+                if self.pattern['fiber_diameter'] >= 5.7:  # if larger than 3.0, 6 central compartments are required, otherwise 3
+                    if loc_inx == 0:
+                        l_step = nr["para1_length"] / 1000 + nr["para2_length"] / 1000 + (nr["ranvier_length"] + nr["inter_length"]) / 2000
+                    if loc_inx == 1 or loc_inx == 3:
+                        l_step = (nr["ranvier_length"] + nr["inter_length"]) / 2000 + nr["para1_length"] / 1000 + nr["para2_length"] / 1000  # switch to mm from micro m
+                    if loc_inx == 2:
+                        l_step = 5 * nr["inter_length"] / 2000
+                else:
+                    l_step = (nr["para1_length"] + nr["para2_length"] + nr["inter_length"])/ 1000 + (nr["ranvier_length"] + nr["inter_length"]) / 2000
+
+                loc_inx += 1
+                self.pattern['Array_coord_pattern_O'][inx, :] = [0.0, self.pattern['Array_coord_pattern_O'][
+                    inx - 1, 1] + l_step, 0.0]  # pattern along Y-axis
+
+                if inx % n_comp == 0:
+                    loc_inx = 0
+
+            # the downsamling is complete, reassign here
+            if self.neuron_model == 'McIntyre2002_ds':
+                self.neuron_model = 'McIntyre2002'
 
         elif self.neuron_model == 'Reilly2016':
             l_step = nr["deltax"] / 2000.0  # linear change of the internodal distance from 1 to 2 mm
@@ -529,6 +570,10 @@ class Neuron_array(object):
 
             population_index = population_index + 1
 
+        # the downsamling is complete, reassign here
+        if self.neuron_model == 'McIntyre2002_ds':
+            self.neuron_model = 'McIntyre2002'
+
         if self.imp_name[-3:] == '.h5':
             hf.close()
 
@@ -603,9 +648,18 @@ class Neuron_array(object):
         subdomains_enc = MeshFunction("size_t", mesh, mesh.topology().dim())
         subdomains_enc.set_all(0)
 
-        for i in range(len(Domains.Encup_index)):
-            subdomains_enc.array()[
-                subdomains_assigned.array() == Domains.Encup_index[i]] = 1  # neuron models cannot be located in CSF
+        #for i in range(len(Domains.Encup_index)):
+        #    subdomains_enc.array()[
+        #        subdomains_assigned.array() == Domains.Encup_index[i]] = 1  # neuron models cannot be located in CSF
+
+        # encap at the electrode array only (defined by ROI)
+        subdomains_enc.array()[subdomains_assigned.array() == Domains.Encup_index[1]] = 1  # neuron models cannot be located in encap
+
+        # encap outside of ROI
+        subdomains_enc_out = MeshFunction("size_t", mesh, mesh.topology().dim())
+        subdomains_enc_out.set_all(0)
+        subdomains_enc_out.array()[
+            subdomains_assigned.array() == Domains.Encup_index[0]] = 1  # neuron models cannot be located in encap
 
         if isinstance(Domains.Float_contacts, list):
             for i in range(len(Domains.Float_contacts)):
@@ -616,6 +670,7 @@ class Neuron_array(object):
                 subdomains_assigned.array() == Domains.Float_contacts] = 1  # neuron models cannot be located in floating conductors
 
         submesh_encup = SubMesh(mesh, subdomains_enc, 1)
+        submesh_encup_out = SubMesh(mesh, subdomains_enc_out, 1)
 
         # if multiple pathways, those will be lists of lists
         self.neurons_idx_encap = []  # IMPORTANT: if the neuron does not intersect with encap. but with the electrode (sparse sampling), it will be treated as outside of the domain
@@ -634,9 +689,13 @@ class Neuron_array(object):
                     Array_coord, inx, i_neuron_encap = self.mark_to_remove(Array_coord,
                                                                            inx)  # will also shift inx to the end of the neuron
                     self.neurons_idx_encap.append(i_neuron_encap)
-
                 else:
-                    if not (mesh.bounding_box_tree().compute_first_entity_collision(
+                    if (submesh_encup_out.bounding_box_tree().compute_first_entity_collision(
+                            pnt) < submesh_encup_out.num_cells()):  # this is a condition to check whether the point is inside encap. layer or floating conductor
+                        points_outside = points_outside + 1
+                        Array_coord, inx, __ = self.mark_to_remove(Array_coord,inx)  # will also shift inx to the end of the neuron
+
+                    elif not (mesh.bounding_box_tree().compute_first_entity_collision(
                             pnt) < mesh.num_cells() * 100):  # if one point of the neural model is absent, the whole model is disabled
                         points_outside = points_outside + 1
                         Array_coord, inx, __ = self.mark_to_remove(Array_coord,

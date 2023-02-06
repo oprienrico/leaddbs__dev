@@ -10,8 +10,8 @@ if ~nargin
     varargout{1}={'Medtronic 3389', 'Medtronic 3387', 'Medtronic 3391', 'Medtronic B33005', 'Medtronic B33015', ...
         'Boston Scientific Vercise', 'Boston Scientific Vercise Directed', ...
         'Boston Scientific Vercise Cartesia HX', 'Boston Scientific Vercise Cartesia X', ...
-        'St. Jude ActiveTip (6146-6149)','St. Jude ActiveTip (6142-6145)', ...
-        'St. Jude Directed 6172 (short)','St. Jude Directed 6173 (long)', ...
+        'Abbott ActiveTip (6146-6149)','Abbott ActiveTip (6142-6145)', ...
+        'Abbott Directed 6172 (short)','Abbott Directed 6173 (long)', ...
         'PINS Medical L301', 'PINS Medical L302', 'PINS Medical L303', .....
         'SceneRay SR1200', 'SceneRay SR1210', 'SceneRay SR1211', 'SceneRay SR1242', ...
         'SDE-08 S8 Legacy', 'SDE-08 S10 Legacy', 'SDE-08 S12 Legacy', 'SDE-08 S16 Legacy', ...
@@ -22,23 +22,25 @@ if ~nargin
         'AdTech SD10R-SP05X Choi', 'AdTech RD10R-SP03X', 'AdTech BF08R-SP05X', 'AdTech BF08R-SP21X', 'AdTech BF08R-SP61X', ...
         'AdTech SD08R-SP05X', 'AdTech SD14R-SP05X', ...
         'ELAINE Rat Electrode', 'FHC WU Rat Electrode', 'NuMed Mini Lead', ...
-        'Aleva directSTIM Directed'}';
+        'Aleva directSTIM Directed', ...
+        'SmartFlow Cannula NGS-NC-06'}';
     varargout{2}={'medtronic_3389', 'medtronic_3387', 'medtronic_3391', 'medtronic_b33005', 'medtronic_b33015', ...
         'boston_vercise', 'boston_vercise_directed', ...
         'boston_vercise_cartesia_hx', 'boston_vercise_cartesia_x', ...
-        'stjude_activetip_2mm','stjude_activetip_3mm', ...
-        'stjude_directed_05','stjude_directed_15', ...
+        'abbott_activetip_2mm','abbott_activetip_3mm', ...
+        'abbott_directed_05','abbott_directed_15', ...
         'pins_l301', 'pins_l302', 'pins_l303', ...
         'sceneray_sr1200', 'sceneray_sr1210', 'sceneray_sr1211', 'sceneray_sr1242', ...
         'sde_08_s8_legacy', 'sde_08_s10_legacy', 'sde_08_s12_legacy', 'sde_08_s16_legacy',...
         'sde_08_s8', 'sde_08_s10', 'sde_08_s12', 'sde_08_s14', 'sde_08_s16', ...
         'pmt_2102_16_092', 'pmt_2102_16_093', 'pmt_2102_16_131', 'pmt_2102_16_142', ...
-        'epc_05c', 'epc_15c', 'neuropace_dl_344_35', ...
+        'epc_05c', 'epc_15c', 'neuropace_dl_344_35', 'neuropace_dl_344_10', ...
         'dixi_d08_05am', 'dixi_d08_08am', 'dixi_d08_10am', 'dixi_d08_12am', 'dixi_d08_15am', 'dixi_d08_18am', ...
         'adtech_sd10r_sp05x_choi', 'adtech_rd10r_sp03x', 'adtech_bf08r_sp05x', 'adtech_bf08r_sp21x', 'adtech_bf08r_sp61x', ...
         'adtech_sd08r_sp05x',  'adtech_sd14r_sp05x', ...
         'elaine_rat_electrode', 'fhc_wu_rat_electrode', 'numed_minilead', ...
-        }';
+        'aleva_directstim_directed', ...
+        'smartflow_ngs-nc-06'}';
     return
 else
     options=varargin{1};
@@ -46,7 +48,7 @@ end
 
 if ~isfield(options, 'elmodel')
     try
-        load(options.subj.recon.recon,'reco');
+        load([options.root,options.patientname,filesep,'reconstruction',filesep,options.patientname,'_desc-reconstruction.mat'],'reco');
         elmodel = ea_get_first_notempty_elmodel(reco.props);
     catch
         %no model was found
@@ -241,8 +243,8 @@ switch elmodel
         elspec.etagenames{2}={'K1-3 (L)','K4-6 (L)','K7-9 (L)','K10-12 (L)','K13-15 (L)','K16 (L)'};
         elspec.etageidx={1:3,4:6,7:9,10:12,13:15,16};
         elspec.forstimulation=1;
-    case 'St. Jude ActiveTip (6146-6149)'
-        elspec.matfname='stjude_activetip_2mm';
+    case 'Abbott ActiveTip (6146-6149)'
+        elspec.matfname='abbott_activetip_2mm';
         elspec.lead_diameter=1.4;
         elspec.lead_color=0.7;
         elspec.contact_length=1.5;
@@ -260,8 +262,8 @@ switch elmodel
         elspec.etagenames{2}=elspec.contactnames((length(elspec.contactnames)/2)+1:end);
         elspec.etageidx=num2cell(1:elspec.numel);
         elspec.forstimulation=1;
-    case 'St. Jude ActiveTip (6142-6145)'
-        elspec.matfname='stjude_activetip_3mm';
+    case 'Abbott ActiveTip (6142-6145)'
+        elspec.matfname='abbott_activetip_3mm';
         elspec.lead_diameter=1.4;
         elspec.lead_color=0.7;
         elspec.contact_length=1.5;
@@ -279,8 +281,8 @@ switch elmodel
         elspec.etagenames{2}=elspec.contactnames((length(elspec.contactnames)/2)+1:end);
         elspec.etageidx=num2cell(1:elspec.numel);
         elspec.forstimulation=1;
-    case 'St. Jude Directed 6172 (short)'
-        elspec.matfname='stjude_directed_05';
+    case 'Abbott Directed 6172 (short)'
+        elspec.matfname='abbott_directed_05';
         elspec.lead_diameter=1.27;
         elspec.lead_color=0.7;
         elspec.contact_length=1.5;
@@ -300,8 +302,8 @@ switch elmodel
         elspec.etagenames{2}={'K1 (L)','K2 (L)','K3 (L)','K4 (L)'};
         elspec.etageidx={1,2:4,5:7,8};
         elspec.forstimulation=1;
-    case 'St. Jude Directed 6173 (long)'
-        elspec.matfname='stjude_directed_15';
+    case 'Abbott Directed 6173 (long)'
+        elspec.matfname='abbott_directed_15';
         elspec.lead_diameter=1.27;
         elspec.lead_color=0.7;
         elspec.contact_length=1.5;
@@ -445,7 +447,7 @@ switch elmodel
         elspec.tip_diameter=1.3;
         elspec.tip_color=0.7;
         elspec.tip_length=1.5;
-        elspec.contact_spacing=3;
+        elspec.contact_spacing=4;
         elspec.numel=4;
         elspec.tipiscontact=0;
         elspec.contactnames={'K0 (R)','K1 (R)','K2 (R)','K3 (R)','K8 (L)','K9 (L)','K10 (L)','K11 (L)'};
@@ -1130,6 +1132,25 @@ switch elmodel
         elspec.etagenames{2}={'K13-15 (L)','K16-18 (L)','K19-21 (L)','K22-24 (L)'};
         elspec.etageidx={1:3,4:6,7:9,10:12};
         elspec.forstimulation=1;
+    case 'SmartFlow Cannula NGS-NC-06'
+        elspec.matfname='smartflow_ngs-nc-06';
+        elspec.lead_diameter=1.65;
+        elspec.lead_color=0.7;
+        elspec.contact_length=10;
+        elspec.contact_diameter=0.27;
+        elspec.contact_color=0.3;
+        elspec.tip_diameter=0.2;
+        elspec.tip_color=0.7;
+        elspec.tip_length=3;
+        elspec.contact_spacing=0;
+        elspec.numel=2;
+        elspec.tipiscontact=1;
+        elspec.contactnames={'K0 (R)','K1 (R)','K3 (L)','K4 (L)'};
+        elspec.isdirected=0;
+        elspec.etagenames{1}=elspec.contactnames(1:length(elspec.contactnames)/2);
+        elspec.etagenames{2}=elspec.contactnames((length(elspec.contactnames)/2)+1:end);
+        elspec.etageidx=num2cell(1:elspec.numel);
+        elspec.forstimulation=0;
 end
 
 if ~isfield(elspec,'eldist') && isa(elspec.contact_spacing, 'cell')

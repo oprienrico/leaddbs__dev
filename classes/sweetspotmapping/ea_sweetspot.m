@@ -66,7 +66,7 @@ classdef ea_sweetspot < handle
     end
 
     methods
-        function obj=ea_disctract(analysispath) % class constructor
+        function obj=ea_sweetspot(analysispath) % class constructor
             if exist('analysispath', 'var') && ~isempty(analysispath)
                 obj.analysispath = analysispath;
                 [~, ID] = fileparts(obj.analysispath);
@@ -311,17 +311,17 @@ classdef ea_sweetspot < handle
                     if ~isempty(vals{1,side})
                         switch obj.statlevel % also differentiate between methods in the prediction part.
                             case 'VTAs'
+                                efield = obj.results.efield{side}(patientsel(test),:)';
+                                efield(~isnan(efield)) = efield(~isnan(efield)) > obj.efieldthreshold;
                                 switch lower(obj.basepredictionon)
                                     case 'mean of scores'
-                                        Ihat(test,side) = ea_nanmean(vals{1,side}.*obj.results.efield{side}(patientsel(test),:)',1);
+                                        Ihat(test,side) = ea_nanmean(vals{1,side}.*efield,1);
                                     case 'sum of scores'
-                                        Ihat(test,side) = ea_nansum(vals{1,side}.*obj.results.efield{side}(patientsel(test),:)',1);
+                                        Ihat(test,side) = ea_nansum(vals{1,side}.*efield,1);
                                     case 'peak of scores'
-                                        Ihat(test,side) = ea_nanmax(vals{1,side}.*obj.results.efield{side}(patientsel(test),:)',1);
+                                        Ihat(test,side) = ea_discfibers_getpeak(vals{1,side}.*efield, obj.posvisible, obj.negvisible, 'peak');
                                     case 'peak 5% of scores'
-                                        ihatvals=vals{1,side}.*obj.results.efield{side}(patientsel(test),:)';
-                                        ihatvals=sort(ihatvals);
-                                        Ihat(test,side) = ea_nansum(ihatvals(1:ceil(size(ihatvals,1).*0.05),:),1);
+                                        Ihat(test,side) = ea_discfibers_getpeak(vals{1,side}.*efield, obj.posvisible, obj.negvisible, 'peak5');
                                 end
                             case 'E-Fields'
                                 switch lower(obj.basepredictionon)
@@ -336,11 +336,9 @@ classdef ea_sweetspot < handle
                                     case 'sum of scores'
                                         Ihat(test,side) = ea_nansum(vals{1,side}.*obj.results.efield{side}(patientsel(test),:)',1);
                                     case 'peak of scores'
-                                        Ihat(test,side) = ea_nanmax(vals{1,side}.*obj.results.efield{side}(patientsel(test),:)',1);
+                                        Ihat(test,side) = ea_discfibers_getpeak(vals{1,side}.*obj.results.efield{side}(patientsel(test),:)', obj.posvisible, obj.negvisible, 'peak');
                                     case 'peak 5% of scores'
-                                        ihatvals=vals{1,side}.*obj.results.efield{side}(patientsel(test),:)';
-                                        ihatvals=sort(ihatvals);
-                                        Ihat(test,side) = ea_nansum(ihatvals(1:ceil(size(ihatvals,1).*0.05),:),1);
+                                        Ihat(test,side) = ea_discfibers_getpeak(vals{1,side}.*obj.results.efield{side}(patientsel(test),:)', obj.posvisible, obj.negvisible, 'peak5');
                                 end
                         end
                     end
@@ -394,8 +392,7 @@ classdef ea_sweetspot < handle
             R1 = R(1);
             R0 = sort(abs(R(2:end)),'descend');
             Rp95 = R0(round(0.05*numPerm));
-            v = ea_searchclosest(R0, R1);
-            pperm = v/numPerm;
+            pperm = mean(abs(R0)>=abs(R1));
             disp(['Permuted p = ',sprintf('%0.2f',pperm),'.']);
 
             % Return only selected I
@@ -451,13 +448,14 @@ classdef ea_sweetspot < handle
             % reset colorbar
             obj.colorbar=[];
             if ~any([obj.posvisible,obj.negvisible])
-                return
+                export=nan;
             end
 
             for group=1:size(vals,1) % vals will have 1x2 in case of bipolar drawing and Nx2 in case of group-based drawings (where only positives are shown).
                 % Vertcat all values for colorbar construction
                 allvals = vertcat(vals{group,:});
                 if isempty(allvals) || all(isnan(allvals))
+                    ea_cprintf('CmdWinWarnings', 'Empty or all-nan value found!\n');
                     continue;
                 else
                     allvals(isnan(allvals)) = 0;
@@ -575,6 +573,15 @@ classdef ea_sweetspot < handle
                         ticklabel{group} = [negvals(1), negvals(end)];
                         ticklabel{group} = arrayfun(@(x) num2str(x,'%.2f'), ticklabel{group}, 'Uni', 0);
                     end
+                end
+            end
+
+            if ~exist('export','var') % all empty
+                for side=1:size(vals,2)
+                    res=obj.results.space{side};
+                    res.dt(1) = 16;
+                    res.img(:)=nan;
+                    export{side}=res;
                 end
             end
 

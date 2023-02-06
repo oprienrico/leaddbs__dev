@@ -2,11 +2,11 @@ function rawImages = ea_genrawimagesjson(BIDSRoot, subjId)
 % [Re-]generate rawimages json file in case it's not present in subject's
 % derivatives folder
 
-ea_cprintf('CmdWinWarnings', 'Generating rawimages.json for "sub-%s":\n', subjId);
-
 % Get all images
 rawdataFolder = fullfile(GetFullPath(BIDSRoot), 'rawdata', ['sub-', subjId]);
-niftiFiles = ea_regexpdir(rawdataFolder, '.*\.nii(\.gz)?$', 1, 'f');
+preopNiftiFiles = ea_regexpdir([rawdataFolder, filesep, 'ses-preop'], '.*\.nii(\.gz)?$', 1, 'f');
+postopNiftiFiles = ea_regexpdir([rawdataFolder, filesep, 'ses-postop'], '.*\.nii(\.gz)?$', 1, 'f');
+niftiFiles = [preopNiftiFiles; postopNiftiFiles];
 
 % Iterate all images
 rawImages = struct;
@@ -22,7 +22,20 @@ for f = 1:length(niftiFiles)
     [~, value] = ea_niifileparts(niftiFiles{f}); % File name without ext
     rawImages.(session).(type).(suffix) = value;
 end
-rawImages = orderfields(rawImages, {'preop', 'postop'}); % Re-order
+
+if isfield(rawImages, 'postop')
+    rawImages = orderfields(rawImages, {'preop', 'postop'}); % Re-order
+end
+
+if isempty(fieldnames(rawImages))
+    % Warn in case it's not a miniset
+    if ~isfile(fullfile(GetFullPath(BIDSRoot), 'miniset.json'))
+        ea_cprintf('CmdWinWarnings', 'No raw images found for "%s":\n', subjId);
+    end
+    return;
+end
+
+ea_cprintf('CmdWinWarnings', 'Generating rawimages.json for "%s":\n', subjId);
 
 % Get prefs folder
 prefsFolder = fullfile(GetFullPath(BIDSRoot), 'derivatives', 'leaddbs', ['sub-', subjId], 'prefs');

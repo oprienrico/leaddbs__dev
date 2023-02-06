@@ -11,7 +11,7 @@ if ~exist('mute','var')
     end
 end
 
-load([ea_space,'ea_space_def.mat']);
+load([ea_space,'spacedef.mat']);
 
 if ~exist([ea_space,'dartel'], 'dir')
     mkdir([ea_space,'dartel']);
@@ -90,7 +90,7 @@ for c=1:tpmnum
 end
 
 prefs=ea_prefs('');
-if ~strcmp(spacedef.tpm(1:6),'custom')
+if ~startsWith(spacedef.tpm,'custom')
     for c=1:tpmnum
         fina=[ea_space([],'dartel'),'dartelmni_6_hires_',sprintf('%05d',c),'.nii'];
         nii=ea_load_nii(fina); % change datatype to something high for reslicing and smoothing.

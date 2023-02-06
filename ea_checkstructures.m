@@ -137,7 +137,7 @@ try
             ea_setnewatlas(h,[],options,handles);
     end
 catch % default (e.g. when changing to a different space
-    sd=load([ea_space,'ea_space_def.mat']);
+    sd=load([ea_space,'spacedef.mat']);
     defaultnucleus=sd.spacedef.defaultnucleus;
     parts=ea_strsplit(defaultnucleus,'@');
     h.Parent.Label=parts{1};
@@ -325,7 +325,7 @@ for cts=cortrasag
     options.d2.lab_overlay=1;
     options.d2.col_overlay=0;
     [hf,img,bb,contour{cts}]=ea_writeplanes(options,options.d2.depth,options.d2.tracor,Vs{options.d2.tracor},'off',2);
-    ea_delete([options.subj.subjDir, filesep, '2D_cuts_export_coordinates.txt']);
+    ea_delete([options.subj.subjDir, filesep, 'export', filesep, '2D', '*viewplane.txt']);
     bbs=getappdata(handles.checkstructures,'bbs');
     if isempty(bbs)
         clear bbs

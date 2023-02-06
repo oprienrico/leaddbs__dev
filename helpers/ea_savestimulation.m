@@ -1,6 +1,6 @@
 function ea_savestimulation(S,options)
 
-if ~isfield(options,'root') % called from lead group
+if ~isfield(options, 'subj') % called from lead group
     return
 end
 

@@ -110,7 +110,7 @@ prefs=ea_prefs;
 
 %% Patient specific part (skipped if no patient is selected or no reco available):
 if ~strcmp(options.patientname,'No Patient Selected') % if not initialize empty viewer
-    if nargin>1 || isfile(options.subj.recon.recon)
+    if nargin>1 || isfield(options.subj, 'recon') && isfile(options.subj.recon.recon)
         if nargin>1
             multiplemode=1;
 
@@ -142,11 +142,6 @@ if ~strcmp(options.patientname,'No Patient Selected') % if not initialize empty 
                 [el_render,el_label,elSide{pt}]=ea_renderelstruct(options,resultfig,elstruct,pt,el_render,el_label);
             else
                 [el_render,el_label,elSide{pt}]=ea_renderelstruct(options,resultfig,elstruct,pt);
-            end
-
-            if strcmp(options.leadprod,'group')
-                recon = ea_regexpdir([options.patient_list{pt}, filesep, 'reconstruction'], 'desc-reconstruction\.mat', 0, 'file');
-                options.subj.recon.recon = recon{1};
             end
 
             if ~multiplemode
@@ -240,7 +235,7 @@ if ~strcmp(options.patientname,'No Patient Selected') % if not initialize empty 
 
             % add discriminative fiber explorer button.
             discfiberadd = uipushtool(ht, 'CData', ea_get_icn('discfiber_add'),...
-                'TooltipString', ['Add Fiber Filtering analysis'],...
+                'TooltipString', ['Add fiber filtering analysis'],...
                 'Tag', ['Add fiber filtering analysis'],...
                 'ClickedCallback', {@ea_add_discfiber,ea_getGroupAnalysisFile(options.groupdir),resultfig});
 
@@ -254,15 +249,15 @@ if ~strcmp(options.patientname,'No Patient Selected') % if not initialize empty 
 
             % add networkmapping explorer button.
             netmapadd = uipushtool(ht, 'CData', ea_get_icn('networkmapping_add'),...
-                'TooltipString', ['Add DBS Network Mapping analysis'],...
-                'Tag', ['Add DBS Network Mapping analysis'],...
+                'TooltipString', ['Add DBS network mapping analysis'],...
+                'Tag', ['Add DBS network mapping analysis'],...
                 'ClickedCallback', {@ea_add_networkmapping,ea_getGroupAnalysisFile(options.groupdir),resultfig});
 
             di=dir([options.root,options.patientname,filesep,'networkmapping',filesep,'*.netmap']);
             for d=1:length(di)
                 uipushtool(ht, 'CData', ea_get_icn('networkmapping'),...
-                    'TooltipString', ['Explore DBS Network Mapping analysis ',ea_stripext(di(d).name)],...
-                    'Tag', ['Explore DBS Network Mapping analysis ',ea_stripext(di(d).name)],...
+                    'TooltipString', ['Explore DBS network mapping analysis ',ea_stripext(di(d).name)],...
+                    'Tag', ['Explore DBS network mapping analysis ',ea_stripext(di(d).name)],...
                     'ClickedCallback', {@ea_add_networkmapping,fullfile(options.groupdir,'networkmapping',di(d).name),resultfig});
             end
 
@@ -431,9 +426,15 @@ lightbulbbutton=uipushtool(ht,'CData',ea_get_icn('lightbulb'),...
 %     'OffCallback',{@objinvisible,getappdata(resultfig,'right_lamp')},'State','on');
 
 if options.prefs.env.dev
-    setBackgroundButton = uipushtool(ht,'CData',ea_get_icn('BG'),...
-        'TooltipString','Set background to Black or White',...
-        'ClickedCallback',{@ea_setElvisBackground,resultfig});
+    setBlackBackgroundButton = uipushtool(ht,'CData',ea_get_icn('BGB'),...
+        'TooltipString','Set background to Black',...
+        'ClickedCallback',@(~, ~) ea_setElvisBlackBackground(resultfig));
+    setWhiteBackgroundButton = uipushtool(ht,'CData',ea_get_icn('BGW'),...
+        'TooltipString','Set background to White',...
+        'ClickedCallback',@(~, ~) ea_setElvisWhiteBackground(resultfig));
+    setTransparentBackgroundButton = uipushtool(ht,'CData',ea_get_icn('BGT'),...
+        'TooltipString','Set background to Transparent',...
+        'ClickedCallback',@(~, ~) ea_setElvisTransparentBackground(resultfig));
 end
 
 % Initialize HD-Export button
@@ -605,31 +606,53 @@ ea_defaultview_transition(v,togglestates);
 ea_defaultview(v,togglestates);
 
 
-function ea_setElvisBackground(source,eventdata,resultfig)
-bg = get(resultfig, 'Color');
+function ea_setElvisBlackBackground(resultfig)
 cmap = gray;
-if all(bg==[0 0 0]) % Black, default background
-    % Get volume data
-    V = getappdata(resultfig, 'V');
-    if isa(V{1}, 'nifti')
-        V = V{1}.dat; % Memory mapped nifti struct
-    else
-        V = V{1}.img; % Standard nifti struct
-    end
+set(resultfig, 'Color', 'k', 'Colormap', cmap);
 
-    % Take the middle z slice
-    zslice = V(:,:,round(size(V,3)/2));
 
-    % Check if background (1st voxel) is dark or bright
-    if zslice(1,1) < mean(zslice(:))
-        % Flip black to white in colormap in case background is dark
-        cmap(1,:) = [1 1 1];
-    end
-
-    set(resultfig, 'Color', 'w', 'Colormap', cmap);
-elseif all(bg==[1 1 1]) % Already toggled to white
-    set(resultfig, 'Color', 'k', 'Colormap', cmap);
+function ea_setElvisWhiteBackground(resultfig)
+cmap = gray;
+% Get volume data
+V = getappdata(resultfig, 'V');
+if isa(V{1}, 'nifti')
+    V = V{1}.dat; % Memory mapped nifti struct
+else
+    V = V{1}.img; % Standard nifti struct
 end
+
+% Take the middle z slice
+zslice = V(:,:,round(size(V,3)/2));
+
+% Check if background (1st voxel) is dark or bright
+if zslice(1,1) < mean(zslice(:))
+    % Flip black to white in colormap in case background is dark
+    cmap(1,:) = [1 1 1];
+end
+
+set(resultfig, 'Color', 'w', 'Colormap', cmap);
+
+
+function ea_setElvisTransparentBackground(resultfig)
+cmap = gray;
+% Get volume data
+V = getappdata(resultfig, 'V');
+if isa(V{1}, 'nifti')
+    V = V{1}.dat; % Memory mapped nifti struct
+else
+    V = V{1}.img; % Standard nifti struct
+end
+
+% Take the middle z slice
+zslice = V(:,:,round(size(V,3)/2));
+
+% Check if background (1st voxel) is dark or bright
+if zslice(1,1) < mean(zslice(:))
+    % Flip black to white in colormap in case background is dark
+    cmap(1,:) = [1 1 1];
+end
+
+set(resultfig, 'Color', 'none', 'Colormap', cmap);
 
 
 function export_video(hobj,ev,options)
@@ -928,7 +951,7 @@ if length(self.K) == 1
 end
 
 %% Capture current figure in high resolution
-if ~strcmp(self.figmode,'lazyupdate');
+if ~strcmp(self.figmode,'lazyupdate')
     tempfile = 'lead_temp_screendump.png';
     self.source_fig = gcf;
     current_paperpositionmode = get(self.source_fig,'PaperPositionMode');

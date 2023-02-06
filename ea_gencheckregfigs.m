@@ -1,5 +1,5 @@
 function ea_gencheckregfigs(options, type)
-fprintf('\nExporting coregistration check images to %scheckreg...\n', [options.root,options.patientname,filesep]);
+fprintf('\nExporting coregistration check images to %scheckreg...\n', [options.subj.coregDir,filesep]);
 
 if ~exist('type', 'var')
     type = {'coreg', 'norm'};
@@ -18,20 +18,27 @@ if ismember('coreg', type)
     preop = rmfield(options.subj.coreg.anat.preop, options.subj.AnchorModality);
 
     % Remove CT from subj.coreg.anat.postop struct, will use tone-mapped image
-    if options.modality == 2
+    if strcmp(options.subj.postopModality, 'CT')
         postop = rmfield(options.subj.coreg.anat.postop, 'CT');
-    else
+    elseif strcmp(options.subj.postopModality, 'MRI')
         postop = options.subj.coreg.anat.postop;
+    else
+        postop = struct;
     end
 
     % Get paths of coregistered image
     coregImage = [struct2cell(preop); struct2cell(postop)];
 
     % Get paths of output figures
-    if isempty(struct2cell(preop)) % Only one pre-op modality available
-        checkregFigure = struct2cell(options.subj.coreg.checkreg.postop);
-    else
+    if isempty(struct2cell(preop)) && isempty(struct2cell(postop))
+        ea_cprintf('CmdWinWarnings', 'No coregistration performed, checkcoreg shipped!\n');
+        return;
+    elseif ~isempty(struct2cell(preop)) && ~isempty(struct2cell(postop))
         checkregFigure = [struct2cell(options.subj.coreg.checkreg.preop); struct2cell(options.subj.coreg.checkreg.postop)];
+    elseif isempty(struct2cell(preop)) % Only one pre-op modality available
+        checkregFigure = struct2cell(options.subj.coreg.checkreg.postop);
+    elseif isempty(struct2cell(postop)) % Only one pre-op modality available
+        checkregFigure = struct2cell(options.subj.coreg.checkreg.preop);
     end
 
     % Generate checkreg figures
@@ -68,17 +75,23 @@ if ismember('norm', type)
     templateImage = [ea_space, options.primarytemplate, '.nii'];
 
     % Remove CT from subj.norm.anat.postop struct, will use tone-mapped image
-    if options.modality == 2
+    if strcmp(options.subj.postopModality, 'CT')
         postop = rmfield(options.subj.norm.anat.postop, 'CT');
-    else
+    elseif strcmp(options.subj.postopModality, 'MRI')
         postop = options.subj.norm.anat.postop;
+    else
+        postop = struct;
     end
 
     % Get paths of coregistered image
     normImage = [struct2cell(options.subj.norm.anat.preop); struct2cell(postop)];
 
     % Get paths of output figures
-    checkregFigure = [struct2cell(options.subj.norm.checkreg.preop); struct2cell(options.subj.norm.checkreg.postop)];
+    if ~isempty(struct2cell(postop))
+        checkregFigure = [struct2cell(options.subj.norm.checkreg.preop); struct2cell(options.subj.norm.checkreg.postop)];
+    else
+        checkregFigure = struct2cell(options.subj.norm.checkreg.preop);
+    end
 
     % Generate checkreg figures
     for i=1:length(normImage)

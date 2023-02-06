@@ -50,6 +50,11 @@ end
 if isfile([ea_gethome, '.ea_prefs.mat.classic'])
     disp('Restore .ea_prefs.mat from classic branch  ...');
     movefile([ea_gethome, '.ea_prefs.mat.classic'], [ea_gethome, '.ea_prefs.mat'])
+    % Fix possible wrong template string
+    load([ea_gethome, '.ea_prefs.mat'], 'machine');
+    machine.d2.backdrop = 'MNI_ICBM_2009b_NLIN_ASYM T1 (Fonov)';
+    machine.togglestates.template = 'MNI_ICBM_2009b_NLIN_ASYM T1 (Fonov)';
+    save([ea_gethome, '.ea_prefs.mat'], 'machine');
 end
 
 if isfile([ea_gethome, '.ea_prefs.json'])
@@ -66,6 +71,7 @@ disp('Switch LeadDBS branch to classic ...')
 system(['git -C ', LeadRoot, ' stash']);
 system(['git -C ', LeadRoot, ' checkout classic']);
 
-disp('Update LeadDBS search path ...');
 lead path;
+savepath;
 rehash toolboxcache;
+disp('LeadDBS search path updated.');

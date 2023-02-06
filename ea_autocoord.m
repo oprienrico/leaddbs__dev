@@ -20,7 +20,7 @@ if isfield(options, 'leadfigure')
     subjId = getappdata(options.leadfigure, 'subjId');
     if ~isempty(bids)
         options.bids = bids;
-        options.subj = bids.getSubj(subjId{1}, options.modality);
+        options.subj = bids.getSubj(subjId{options.pat}, options.modality);
     end
 end
 
@@ -38,8 +38,18 @@ end
 
 % only 3D-rendering viewer can be opened if no patient is selected.
 if ~strcmp(options.patientname,'No Patient Selected') && ~isempty(options.patientname)
+    if isfile(fullfile(options.bids.datasetDir, 'miniset.json'))
+        isMiniset = 1;
+    else
+        isMiniset = 0;
+    end
+
     % Copy post-op images to preprocessing folder, no preproc is done for now
-    fields = fieldnames(options.subj.postopAnat);
+    if  isMiniset || ~isfield(options.subj, 'postopAnat')
+        fields = {};
+    else
+        fields = fieldnames(options.subj.postopAnat);
+    end
 
     for i=1:length(fields)
         if ~isfile(options.subj.postopAnat.(fields{i}).preproc)
@@ -57,7 +67,12 @@ if ~strcmp(options.patientname,'No Patient Selected') && ~isempty(options.patien
 
     % Preprocessing pre-op images
     preprocessing = 0;
-    fields = fieldnames(options.subj.preopAnat);
+    if isMiniset || ~isfield(options.subj, 'preopAnat')
+        fields = {};
+    else
+        fields = fieldnames(options.subj.preopAnat);
+    end
+
     for i=1:length(fields)
         if ~isfile(options.subj.preopAnat.(fields{i}).preproc)
             % Copy files
@@ -75,9 +90,12 @@ if ~strcmp(options.patientname,'No Patient Selected') && ~isempty(options.patien
             % Run reorientation, cropping and bias field correction
             ea_anatpreprocess(options.subj.preopAnat.(fields{i}).preproc);
 
-            % Preprocessing only for pre-op anchor image
+            % Preprocessing steps only for pre-op anchor image
             if i==1
-                ea_resliceanat(options.subj.preopAnat.(fields{i}).preproc);
+                % Skip reslicing anchor image to 0.7^3 resolution when only pre-op images exist
+                if isfield(options.subj, 'postopAnat')
+                    ea_resliceanat(options.subj.preopAnat.(fields{i}).preproc);
+                end
                 % ea_acpcdetect(options.subj.preopAnat.(fields{i}).preproc);
             end
 
@@ -98,11 +116,13 @@ if ~strcmp(options.patientname,'No Patient Selected') && ~isempty(options.patien
     end
 
     % Pre-coregister pre-op anchor image
-    if ~isfile(options.subj.preopAnat.(fields{1}).coreg)
-        ea_precoreg(options.subj.preopAnat.(fields{1}).preproc, ... % Input anchor image
-            options.primarytemplate, ... % Template to use
-            options.subj.preopAnat.(fields{1}).coreg, ... % Output pre-coregistered image
-            options.subj.coreg.transform.(fields{1})); % % Pre-coregistration transform
+    if ~isMiniset && isfield(options.subj, 'preopAnat')
+        if ~isfile(options.subj.preopAnat.(fields{1}).coreg)
+            ea_precoreg(options.subj.preopAnat.(fields{1}).preproc, ... % Input anchor image
+                options.primarytemplate, ... % Template to use
+                options.subj.preopAnat.(fields{1}).coreg, ... % Output pre-coregistered image
+                options.subj.coreg.transform.(fields{1})); % % Pre-coregistration transform
+        end
     end
 
     coregDone = 0;
@@ -113,12 +133,12 @@ if ~strcmp(options.patientname,'No Patient Selected') && ~isempty(options.patien
         coregDone = ea_coregpreopmr(options);
     end
 
-    if options.modality == 1 && options.coregmr.do
+    if strcmp(options.subj.postopModality, 'MRI') && options.coregmr.do
         % Coregister post-op MRI to pre-op MRI
         coregDone = ea_coregpostopmr(options) || coregDone;
     end
 
-    if options.modality == 2 && options.coregct.do
+    if strcmp(options.subj.postopModality, 'CT') && options.coregct.do
         % Coregister post-op CT to pre-op MRI
         coregDone = ea_coregpostopct(options) || coregDone;
     end
@@ -167,21 +187,19 @@ if ~strcmp(options.patientname,'No Patient Selected') && ~isempty(options.patien
         ea_perform_lc(options);
     end
 
-    if options.atl.genpt % generate patient specific atlas set
-        ea_ptspecific_atl(options);
-    end
-
-    if options.atl.normalize % normalize patient's atlas-set.
-        ea_norm_ptspecific_atl(options)
+    if options.d2.write || options.d3.write
+        if options.atl.genpt % generate patient specific atlas set
+            ea_ptspecific_atl(options);
+        end
     end
 
     if options.checkreg
         % Export checkreg figures
-        if isempty(ea_regexpdir([options.subj.coregDir, filesep, 'checkreg'], '.*\.png'))
+        if isempty(ea_regexpdir([options.subj.coregDir, filesep, 'checkreg'], '^(?!\.).*\.png$'))
             ea_gencheckregfigs(options, 'coreg');
         end
 
-        if isempty(ea_regexpdir([options.subj.normDir, filesep, 'checkreg'], '.*\.png'))
+        if isempty(ea_regexpdir([options.subj.normDir, filesep, 'checkreg'], '^(?!\.).*\.png$'))
             ea_gencheckregfigs(options, 'norm');
         end
 
@@ -198,11 +216,7 @@ if ~strcmp(options.patientname,'No Patient Selected') && ~isempty(options.patien
     end
 
     if options.normalize.refine
-        if options.prefs.env.dev
-            ea_runwarpdrive(options);
-        else
-            ea_checkstructures(options);
-        end
+        ea_runwarpdrive(options);
     end
 
     if options.ecog.extractsurface.do
@@ -214,27 +228,21 @@ if ~strcmp(options.patientname,'No Patient Selected') && ~isempty(options.patien
                end
                ea_cat_seg(options);
            case 2 % FS
-               hastb=ea_hastoolbox('freesurfer');
+               if exist([options.subj.freesurferDir,filesep,'sub-',options.subj.subjId,filesep],'dir')
+                   if options.overwriteapproved
+                       % for now still ask user to confirm recalculation
+                       % since fs takes so long.
+                       answ=questdlg('Existing FreeSurfer output folder found. Are you sure you want to recalculate results & overwrite?', ...
+                          'FreeSurfer output found','Recalculate & Overwrite','Skip','Skip');
 
-               if ~hastb
-                   ea_error('Freesurfer needs to be installed and connected to Lead-DBS');
+                       switch lower(answ)
+                           case 'recalculate & overwrite'
+                               ea_runfreesurfer(options)
+                       end
+                   end
+               else
+                    ea_runfreesurfer(options);
                end
-               hastb=ea_hastoolbox('fsl');
-               if ~hastb
-                   ea_error('FSL needs to be installed and connected to Lead-DBS');
-               end
-
-               options.prefs=ea_prefs;
-               [options,presentfiles]=ea_assignpretra(options);
-               setenv('SUBJECTS_DIR',[options.root,options.patientname,filesep]);
-               if exist([options.root,options.patientname,filesep,'fs'],'dir')
-                   rmdir([options.root,options.patientname,filesep,'fs'],'s');
-               end
-               system([options.prefs.fspath,filesep,'bin',filesep,...
-                   'recon-all',...
-                   ' -subjid fs',...
-                   ' -i ',[options.root,options.patientname,filesep,presentfiles{1}],...
-                   ' -all']);
        end
     end
 
@@ -243,6 +251,10 @@ if ~strcmp(options.patientname,'No Patient Selected') && ~isempty(options.patien
         poptions = ea_checkmanapproved(options);
         ea_mkdir(options.subj.reconDir);
         if ~isempty(poptions.sides)
+            if numel(options.uipatdirs) > 1
+                % Override recon method in multiple patients case
+                options.reconmethod = options.prefs.reco.method.(options.subj.postopModality);
+            end
             switch options.reconmethod
                 case 'Refined TRAC/CORE' % refined TRAC/CORE
                     [coords_mm,trajectory,markers]=ea_runtraccore(poptions);

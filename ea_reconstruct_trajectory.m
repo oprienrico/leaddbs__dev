@@ -3,7 +3,7 @@ function [trajectory,trajvector]=ea_reconstruct_trajectory(priortrajectory,tra_n
 % Copyright (C) 2014 Charite University Medicine Berlin, Movement Disorders Unit
 % Andreas Horn
 
-if options.modality==2 % CT support
+if strcmp(options.subj.postopModality, 'CT') % CT support
     tra_nii.img=tra_nii.img*-1;
 else
     if strcmp(options.entrypoint,'Auto')
@@ -388,7 +388,7 @@ end
 
 function [startslice,endslice,masksz]=ea_getstartslice(options) % get reconstruction default dimensions for current space
 spacedef=ea_getspacedef;
-standardspacedef=load([ea_getearoot,'templates',filesep,'space',filesep,'MNI152NLin2009bAsym',filesep,'ea_space_def.mat']);
+standardspacedef=load([ea_getearoot,'templates',filesep,'space',filesep,'MNI152NLin2009bAsym',filesep,'spacedef.mat']);
 if isfield(spacedef,'guidef')
     whichentry=ismember(options.entrypoint,spacedef.guidef.entrypoints);
     masksz=spacedef.guidef.masks(whichentry,:);

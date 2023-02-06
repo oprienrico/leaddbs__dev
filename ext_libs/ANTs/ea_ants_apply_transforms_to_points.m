@@ -11,10 +11,19 @@ if nargin>3 % Transformation file explicitly specified
     tstring = [' --transform [', ea_path_helper(transform), ',',num2str(useinverse),']']; % [transformFileName,useInverse]
 else
     options = ea_getptopts(subjDir);
-    if useinverse
-        transform = [options.subj.norm.transform.inverseBaseName, 'ants.nii.gz'];
+
+    json = loadjson(options.subj.norm.log.method);
+    if contains(json.method, 'affine', 'IgnoreCase', true)
+        % Three-step affine normalization (Schonecker 2009) used
+        warpSuffix = 'ants.mat';
     else
-        transform = [options.subj.norm.transform.forwardBaseName, 'ants.nii.gz'];
+        warpSuffix = 'ants.nii.gz';
+    end
+
+    if useinverse
+        transform = [options.subj.norm.transform.inverseBaseName, warpSuffix];
+    else
+        transform = [options.subj.norm.transform.forwardBaseName, warpSuffix];
     end
 
     if isfile(transform)
@@ -36,14 +45,14 @@ end
 
 uuid = ea_generate_uuid;
 
-input_file = ea_path_helper([tempdir, 'tmpin_', uuid, '.csv']);
-output_file = ea_path_helper([tempdir, 'tmpout_', uuid, '.csv']);
+input_file = [tempdir, 'tmpin_', uuid, '.csv'];
+output_file = [tempdir, 'tmpout_', uuid, '.csv'];
 
 cmd = [applyTransformsToPoints, ...
     ' --dimensionality 3' ...   % dimensionality
     ' --precision 0' ...    % single precision
-    ' --input ',  input_file ...  % input csv file with x,y,z,t (at least) as the column header
-    ' --output ', output_file ...    % warped output csv file
+    ' --input ',  ea_path_helper(input_file) ...  % input csv file with x,y,z,t (at least) as the column header
+    ' --output ', ea_path_helper(output_file) ...    % warped output csv file
     tstring];
 
 ea_writecsv(input_file, input);

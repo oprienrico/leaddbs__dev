@@ -14,6 +14,7 @@ import numpy as np
 import time
 import pickle
 import subprocess
+import sys
 import importlib
 import os
 import warnings
@@ -37,11 +38,11 @@ def copytree(src, dst, symlinks=False, ignore=None):
             shutil.copy2(s, d)
 
 
-def conduct_unit_IFFT(d, Xs_signal_norm, N_array, FR_vector_signal, t_vector, name_sorted_solution,
-                      inx_start_octv):
-    # stores sunit solution (el. potential on axons in space and time) over contacts
+def conduct_unit_IFFT(d, DBS_pulse, N_array, name_sorted_solution,
+                      Truncated_pulse):
 
-    from IFFT_contact_ground import convolute_signal_with_field_and_compute_ifft
+    # stores unit solution (el. potential on axons in space and time) over contacts
+    from Field_IFFT_on_different_axons import convolute_signal_with_unit_field_and_compute_ifft
     if d["spectrum_trunc_method"] == 'Octave Band Method':
         if isinstance(d["n_Ranvier"], list):  # if different populations
             last_point = 0
@@ -50,14 +51,12 @@ def conduct_unit_IFFT(d, Xs_signal_norm, N_array, FR_vector_signal, t_vector, na
             hf.close()
             for i in range(len(d["n_Ranvier"])):
                 # print("in ",lst_population_names[i]," population")
-                last_point = convolute_signal_with_field_and_compute_ifft(d, Xs_signal_norm, N_array.N_models[i], N_array.pattern['num_segments'][i],
-                                                                          FR_vector_signal, t_vector,
+                last_point = convolute_signal_with_unit_field_and_compute_ifft(d, DBS_pulse, N_array.N_models[i], N_array.pattern['num_segments'][i],
                                                                           name_sorted_solution,
-                                                                          inx_st_oct = inx_start_octv, dif_axons=True,
+                                                                          trunc_pulse = Truncated_pulse, dif_axons=True,
                                                                           last_point = last_point)
         else:
-            convolute_signal_with_field_and_compute_ifft(d, Xs_signal_norm, N_array.N_models, N_array.pattern['num_segments'], FR_vector_signal,
-                                                         t_vector, name_sorted_solution, inx_st_oct=inx_start_octv,
+            convolute_signal_with_unit_field_and_compute_ifft(d, DBS_pulse, N_array.N_models, N_array.pattern['num_segments'], name_sorted_solution, trunc_pulse=Truncated_pulse,
                                                          dif_axons=False, last_point=0)
     else:
         logging.scale("Spectrum truncation with Octave Band Method has to be enabled")
@@ -99,11 +98,14 @@ def test_scaling(S_vector,d,MRI_param,Xs_signal_norm,Neuron_models,FR_vector_sig
         
     elif d["Axon_Model_Type"] == 'Reilly2016':
         os.chdir("Reilly2016/")
-        logging.critical("Please, precompile Reilly2016 and comment out the next line")
-        raise SystemExit
+        if sys.platform == 'win32':
+            logging.critical(
+                "If using Windows, please make sure your precompile Reilly2016 and comment out the next line")
+            raise SystemExit
         with open(os.devnull, 'w') as FNULL: subprocess.call('nrnivmodl', shell=True, stdout=FNULL, stderr=subprocess.STDOUT)
 
     from Axon_files.NEURON_run import run_simulation_with_NEURON
+
     if isinstance(d["n_Ranvier"],list) and len(d["n_Ranvier"])>1:
         Number_of_activated = 0
         last_point=0
@@ -141,7 +143,7 @@ def test_scaling(S_vector,d,MRI_param,Xs_signal_norm,Neuron_models,FR_vector_sig
             activation_in_populations[i]=num_activ_in_population
         hf.close()
     else:
-        activation_in_populations=Number_of_activated
+        activation_in_populations = Number_of_activated
 
     if os.path.isdir(os.environ['PATIENTDIR']+'/Field_solutions/Activation'):     # we always re-run NEURON simulation
         os.system('rm -fr '+os.environ['PATIENTDIR']+'/Field_solutions/Activation')
@@ -151,6 +153,25 @@ def test_scaling(S_vector,d,MRI_param,Xs_signal_norm,Neuron_models,FR_vector_sig
     #     os.system('rm -fr '+os.environ['PATIENTDIR']+'/Axons_in_time')
     #     os.makedirs(os.environ['PATIENTDIR']+'/Axons_in_time')
 
+    # store activations over iterations
+    if d['Current_sets'] == True:
+        iter_results = []
+        iter_results.append(scaling_index)
+        if type(activation_in_populations) is np.ndarray:
+            for result in activation_in_populations:
+                iter_results.append(result)
+        else:
+            iter_results.append(activation_in_populations)
+        iter_results = np.vstack((iter_results)).T
+
+        if scaling_index == 0:
+            with open(os.environ['PATIENTDIR'] + '/Activations_over_iterations.csv', 'w') as f_handle:
+                np.savetxt(f_handle, iter_results)
+        else:
+            with open(os.environ['PATIENTDIR'] + '/Activations_over_iterations.csv', 'a') as f_handle:
+                np.savetxt(f_handle, iter_results)
+
+    # results for the optimizer are stored in compute_similarity()
 
     return activation_in_populations
 
@@ -194,6 +215,12 @@ def compute_similarity(S_vector, *args):
     optim_data = []
     for i in range(len(S_vector)):
         optim_data.append(S_vector[i])
+
+    # store also activation if profile
+    if len(d['optimal_profile']) != 1:
+        for act in activation_profile:
+            optim_data.append(act)
+
     optim_data.append(distance)
     optim_data_array = np.vstack((optim_data)).T
     with open(os.environ['PATIENTDIR']+'/current_optim_iterations.csv', 'a') as f_handle:

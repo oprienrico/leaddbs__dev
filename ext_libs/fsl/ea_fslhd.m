@@ -12,21 +12,23 @@ if ~isfile(input)
     error('%s not found!', input);
 end
 
-input = ea_path_helper(input);
-
 basedir = [fileparts(mfilename('fullpath')), filesep];
 if ispc
     FSLHD = ea_path_helper([basedir, 'fslhd.exe']);
 else
-    FSLHD = [basedir, 'fslhd.', computer('arch')];
+    FSLHD = ea_path_helper([basedir, 'fslhd.', computer('arch')]);
 end
 
-cmd = [FSLHD, ' ', xmlarg, ' ', input, ];
+cmd = [FSLHD, ' ', xmlarg, ' ', ea_path_helper(input), ];
 
 if ~ispc
-    [~, cmdout] = system(['bash -c "', cmd, '"']);
+    [status, cmdout] = system(['bash -c "', cmd, '"']);
 else
-    [~, cmdout] = system(cmd);
+    [status, cmdout] = system(cmd);
+end
+
+if status ~= 0
+    error('%s', strip(cmdout));
 end
 
 % Trim string
