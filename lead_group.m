@@ -311,7 +311,12 @@ else
 
     if ~isempty(folders)
         M=getappdata(handles.leadfigure,'M');
-
+        %it is a patient
+        
+        %ensure that you are getting the derivative folder for lead dbs, even if
+        %you pass the root folder
+        [folders] = ea_get_pts_deriv_leaddbs(folders);
+        
         M.patient.list=[M.patient.list; folders];
         M.patient.group=[M.patient.group; ones(length(folders),1)];
         options=ea_setopts_local(handles);
@@ -432,7 +437,12 @@ end
 M=getappdata(handles.leadfigure,'M');
 
 folders=ea_uigetdir(ea_startpath,'Select Patient folders..');
-M.patient.list=[M.patient.list;folders'];
+folders=folders';
+%ensure that you are getting the derivative folder for lead dbs, even if
+%you pass the root folder
+[folders] = ea_get_pts_deriv_leaddbs(folders);
+
+M.patient.list=[M.patient.list;folders];
 M.patient.group=[M.patient.group;ones(length(folders),1)];
 options=ea_setopts_local(handles);
 
