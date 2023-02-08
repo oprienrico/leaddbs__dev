@@ -260,12 +260,13 @@ if strcmp(target, 'groupDir')
             analysisFile = ea_regexpdir(folders{1}, '^dataset-[^\W_]+_analysis-[^\W_]+\.mat$', 0);
             if ~isempty(analysisFile)
                folders{1} = ea_genDatasetFromGroupAnalysis(analysisFile{1});
+            else
+                %no file has been generated yet, and the folder has no derivatives or any other needed folder structure.
+                % Initialize everything
+                analysisFile=ea_genGroupAnalysisFile(folders{1});
             end
         end
         analysisFile = ea_getGroupAnalysisFile(folders{1});
-        if isempty(analysisFile) % Create new analysis file in case not found
-            analysisFile = ea_genGroupAnalysisFile(folders{1});
-        end
         groupdir = [fileparts(analysisFile), filesep];
         load(analysisFile, 'M');
 
@@ -376,12 +377,13 @@ else
         analysisFile = ea_regexpdir(groupdir, '^dataset-[^\W_]+_analysis-[^\W_]+\.mat$', 0);
         if ~isempty(analysisFile)
            groupdir = ea_genDatasetFromGroupAnalysis(analysisFile{1});
+        else
+            %no file has been generated yet, and the folder has no derivatives or any other needed folder structure.
+            % Initialize everything
+            analysisFile=ea_genGroupAnalysisFile(groupdir);
         end
     end
     analysisFile = ea_getGroupAnalysisFile(groupdir);
-    if isempty(analysisFile) % Create new analysis file in case not found
-        analysisFile = ea_genGroupAnalysisFile(groupdir);
-    end
     groupdir = fileparts(analysisFile);
 end
 
@@ -513,7 +515,7 @@ options.expstatvat.do=M.ui.statvat;
 options.native=0;
 
 try
-    options.numcontacts=size(M.elstruct(1).coords_mm{1},1);
+    options.numcontacts=get_elstruct_numcontacts(M.elstruct(1));
 catch
     warning('Localizations seem not properly defined.');
 end
@@ -984,7 +986,7 @@ for pt=selection
 
     fprintf('\nProcessing %s...\n\n', options.patientname);
     try
-        options.numcontacts=size(M.elstruct(pt).coords_mm{1},1);
+        options.numcontacts=get_elstruct_numcontacts(M.elstruct(pt));
     catch % no localization present or in wrong format.
         ea_error(['Please localize ',options.patientname,' first.']);
     end
@@ -1605,7 +1607,7 @@ options=ea_setopts_local(handles);
 [options.root, options.patientname] = fileparts(handles.groupdir_choosebox.String);
 options.root = [options.root, filesep];
 
-options.numcontacts=size(M.elstruct(1).coords_mm{1},1);
+options.numcontacts=get_elstruct_numcontacts(M.elstruct(1));
 options.elmodel=M.elstruct(1).elmodel;
 options=ea_resolve_elspec(options);
 options.prefs=ea_prefs(options.patientname);
@@ -1775,3 +1777,15 @@ function minisetbutton_Callback(hObject, eventdata, handles)
 % handles    structure with handles and user data (see GUIDATA)
 M = getappdata(gcf,'M');
 ea_generate_min_dataset(M);
+
+
+function numcontacts=get_elstruct_numcontacts(M_elstruct_single)
+    %used for options.numcontacts, handling L only leads.
+    %nput is a single elstruct
+    for side=1:2
+        if ea_arenopoints4side(M_elstruct_single.coords_mm, side)
+            continue;
+        end
+        numcontacts=size(M_elstruct_single.coords_mm{side},1);
+    end
+    

@@ -1,6 +1,10 @@
 function analysisFile = ea_genGroupAnalysisFile(folder)
 % Generate new group analysis file based on input dataset or group analysis folder.
 
+%if the folder is completely empty (does not have a derivatives folder)
+if ~isfolder(fullfile(folder, 'derivatives')) % Input is dataset root folder
+    mkdir(fullfile(folder, 'derivatives'));
+end
 if contains(folder, ['derivatives', filesep, 'leadgroup', filesep]) % Input is group analysis folder
     groupdir = fullfile(folder, filesep);
     [~, guid] = fileparts(fileparts(groupdir));
