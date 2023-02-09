@@ -267,6 +267,9 @@ if strcmp(target, 'groupDir')
             end
         end
         analysisFile = ea_getGroupAnalysisFile(folders{1});
+        if isempty(analysisFile) % Create new analysis file in case not found
+            analysisFile = ea_genGroupAnalysisFile(folders{1});
+        end
         groupdir = [fileparts(analysisFile), filesep];
         load(analysisFile, 'M');
 
@@ -389,6 +392,9 @@ else
         end
     end
     analysisFile = ea_getGroupAnalysisFile(groupdir);
+    if isempty(analysisFile) % Create new analysis file in case not found
+        analysisFile = ea_genGroupAnalysisFile(groupdir);
+    end
     groupdir = fileparts(analysisFile);
 end
 
