@@ -22,7 +22,7 @@ function varargout = ea_stimparams(varargin)
 
 % Edit the above text to modify the response to help ea_stimparams
 
-% Last Modified by GUIDE v2.5 03-Mar-2021 16:26:12
+% Last Modified by GUIDE v2.5 13-Apr-2023 10:40:00
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -152,7 +152,7 @@ else % Call in lead 'group'
     names = getappdata(resultfig, 'vatfunctionnames');
 end
 
-setappdata(gcf, 'genvatfunctions', funcs);
+setappdata(handles.stimfig, 'genvatfunctions', funcs);
 value = find(contains(names, handles.modelselect.String(handles.modelselect.Value)));
 set(handles.modelselect, 'String', names);
 set(handles.modelselect, 'Value', value);
@@ -1078,112 +1078,122 @@ function stimulate_Callback(hObject, eventdata, handles)
 % handles    structure with handles and user data (see GUIDATA)
 
 ea_busyaction('on',handles.stimfig,'stim');
-elstruct = getappdata(handles.stimfig,'elstruct');
-resultfig = getappdata(handles.stimfig,'resultfig');
-options = getappdata(handles.stimfig,'options');
-% refresh prefs:
-options.prefs = ea_prefs;
-setappdata(resultfig,'options',options);
-setappdata(handles.stimfig,'options',options);
-S = getappdata(handles.stimfig,'S');
-S = ea_activecontacts(S);
 
-options = getappdata(resultfig,'options'); % selected atlas could have refreshed.
-options.orignative = options.native;
+% This is where the code goes if user inputting parameters with csv
+if(get(handles.use_param_file, "Value"))
+    addpath("..")
+    VTA_param_excel(handles);
 
-if strcmp('on',get(handles.estimateInTemplate,'Visible')) % only allowed for specific VTA functions
-    switch get(handles.estimateInTemplate,'Value')
-        case 0
-            S.template = 'warp';
-            options.native = 1;
-        case 1
-            S.template = 'direct';
-    end
-end
-
-if ~isfield(options.subj, 'norm') && options.native
-    ea_cprintf('CmdWinWarnings', 'Calculating VTA in template space since patient folder %s is incomplete.\n', options.subj.subjId);
-    options.native = 0;
-end
-
-ea_savestimulation(S,options);
-setappdata(handles.stimfig,'S',S);
-
-if isfield(elstruct,'group') % group analysis, more than one electrode set
-    % this should not happen, in this case the stim button is
-    % hidden.
-    keyboard
-end
-
-% assign correct .m-file to function.
-genvatfunctions = getappdata(handles.stimfig,'genvatfunctions');
-ea_genvat = eval(['@',genvatfunctions{get(handles.modelselect,'Value')}]);
-stimname = S.label;
-
-for el = 1:length(elstruct)
-    % Load stim coordinates
-    if options.native % Reload native space coordinates
-        coords = ea_load_reconstruction(options);
-    else
-        coords = elstruct(el).coords_mm;
-    end
-
-    if strcmp(S.model, 'OSS-DBS (Butenko 2020)') % For OSS-DBS, side iteration is within the genvat function
-        % Set stimSetMode flag to options
-        % (avoid additional parameter or setting appdata, to make it scriptable)
-        if handles.addStimSet.Value
-            options.stimSetMode = 1;
-        else
-            options.stimSetMode = 0;
-        end
-        if options.prefs.machine.vatsettings.butenko_calcAxonActivation
-            feval(ea_genvat,getappdata(handles.stimfig,'S'),options,handles.stimfig);
-            ea_busyaction('off',handles.stimfig,'stim');
-            return;
-        else
-            [~, stimparams] = feval(ea_genvat,getappdata(handles.stimfig,'S'),options,handles.stimfig);
-            flix = 1;
-        end
-    else
-        stimparams = struct();
-        for iside = 1:length(options.sides)
-            side = options.sides(iside);
-            [vatfv, vatvolume] = feval(ea_genvat,coords,getappdata(handles.stimfig,'S'),side,options,stimname,handles.stimfig);
-            stimparams(1,side).VAT(el).VAT = vatfv;
-            stimparams(1,side).volume = vatvolume;
-            flix = 1;
+% This is what the code did originally
+else
+    
+    elstruct = getappdata(handles.stimfig,'elstruct');
+    resultfig = getappdata(handles.stimfig,'resultfig');
+    options = getappdata(handles.stimfig,'options');
+    % refresh prefs:
+    options.prefs = ea_prefs;
+    setappdata(resultfig,'options',options);
+    setappdata(handles.stimfig,'options',options);
+    
+    S = getappdata(handles.stimfig,'S');
+    S = ea_activecontacts(S);
+    
+    options = getappdata(resultfig,'options'); % selected atlas could have refreshed.
+    options.orignative = options.native;
+    
+    if strcmp('on',get(handles.estimateInTemplate,'Visible')) % only allowed for specific VTA functions
+        switch get(handles.estimateInTemplate,'Value')
+            case 0
+                S.template = 'warp';
+                options.native = 1;
+            case 1
+                S.template = 'direct';
         end
     end
-end
-
-options.native = options.orignative;
-PL = getappdata(resultfig, 'PL');
-for group = 1:length(PL)
-    ea_deletePL(PL(group));
-end
-clear PL
-
-for group = flix
-    setappdata(resultfig,'stimparams',stimparams(group,:));
-    setappdata(resultfig,'curS',S(group));
-
-    if ~exist('hmchanged','var')
-        hmchanged = 1;
+    
+    if ~isfield(options.subj, 'norm') && options.native
+        ea_cprintf('CmdWinWarnings', 'Calculating VTA in template space since patient folder %s is incomplete.\n', options.subj.subjId);
+        options.native = 0;
     end
-    ea_calc_vatstats(resultfig,options,hmchanged);
-
-    try % TODO: fix dir
-        copyfile([options.root,options.patientname,filesep,'ea_pm.nii'],[options.root,options.patientname,filesep,'ea_pm_group_',num2str(group),'.nii']);
-    end
-
-    try
-        PL(group) = getappdata(resultfig,'PL');
-    catch
+    
+    ea_savestimulation(S,options);
+    setappdata(handles.stimfig,'S',S);
+    
+    if isfield(elstruct,'group') % group analysis, more than one electrode set
+        % this should not happen, in this case the stim button is
+        % hidden.
         keyboard
     end
+    
+    % assign correct .m-file to function.
+    genvatfunctions = getappdata(handles.stimfig,'genvatfunctions');
+    ea_genvat = eval(['@',genvatfunctions{get(handles.modelselect,'Value')}]);
+    stimname = S.label;
+    
+    for el = 1:length(elstruct)
+        % Load stim coordinates
+        if options.native % Reload native space coordinates
+            coords = ea_load_reconstruction(options);
+        else
+            coords = elstruct(el).coords_mm;
+        end
+    
+        if strcmp(S.model, 'OSS-DBS (Butenko 2020)') % For OSS-DBS, side iteration is within the genvat function
+            % Set stimSetMode flag to options
+            % (avoid additional parameter or setting appdata, to make it scriptable)
+            if handles.addStimSet.Value
+                options.stimSetMode = 1;
+            else
+                options.stimSetMode = 0;
+            end
+            if options.prefs.machine.vatsettings.butenko_calcAxonActivation
+                feval(ea_genvat,getappdata(handles.stimfig,'S'),options,handles.stimfig);
+                ea_busyaction('off',handles.stimfig,'stim');
+                return;
+            else
+                [~, stimparams] = feval(ea_genvat,getappdata(handles.stimfig,'S'),options,handles.stimfig);
+                flix = 1;
+            end
+        else
+            stimparams = struct();
+            for iside = 1:length(options.sides)
+                side = options.sides(iside);
+                [vatfv, vatvolume] = feval(ea_genvat,coords,getappdata(handles.stimfig,'S'),side,options,stimname,handles.stimfig);
+                stimparams(1,side).VAT(el).VAT = vatfv;
+                stimparams(1,side).volume = vatvolume;
+                flix = 1;
+            end
+        end
+    end
+    
+    options.native = options.orignative;
+    PL = getappdata(resultfig, 'PL');
+    for group = 1:length(PL)
+        ea_deletePL(PL(group));
+    end
+    clear PL
+    
+    for group = flix
+        setappdata(resultfig,'stimparams',stimparams(group,:));
+        setappdata(resultfig,'curS',S(group));
+    
+        if ~exist('hmchanged','var')
+            hmchanged = 1;
+        end
+        ea_calc_vatstats(resultfig,options,hmchanged);
+    
+        try % TODO: fix dir
+            copyfile([options.root,options.patientname,filesep,'ea_pm.nii'],[options.root,options.patientname,filesep,'ea_pm_group_',num2str(group),'.nii']);
+        end
+    
+        try
+            PL(group) = getappdata(resultfig,'PL');
+        catch
+            keyboard
+        end
+    end
+    setappdata(resultfig,'PL',PL);
 end
-setappdata(resultfig,'PL',PL);
-
 ea_busyaction('off',handles.stimfig,'stim');
 
 
@@ -3523,4 +3533,66 @@ if hObject.Value
         M.ui.stimSetMode = 1;
         setappdata(resultfig, 'M');
     end
+end
+
+
+
+function delete_Callback(hObject, eventdata, handles)
+% hObject    handle to delete (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of delete as text
+%        str2double(get(hObject,'String')) returns contents of delete as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function delete_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to delete (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+% --- Executes on button press in delete.
+function use_param_file_Callback(hObject, eventdata, handles)
+% hObject    handle to delete (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hint: get(hObject,'Value') returns toggle state of delete
+
+
+% --- Executes during object deletion, before destroying properties.
+function delete_DeleteFcn(hObject, eventdata, handles)
+% hObject    handle to delete (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+
+
+function param_filename_box_Callback(hObject, eventdata, handles)
+% hObject    handle to param_filename_box (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of param_filename_box as text
+%        str2double(get(hObject,'String')) returns contents of param_filename_box as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function param_filename_box_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to param_filename_box (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
 end
